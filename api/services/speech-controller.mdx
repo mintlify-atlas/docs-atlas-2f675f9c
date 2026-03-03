@@ -1,0 +1,331 @@
+---
+title: "SpeechController"
+description: "Controller for Android speech recognition with real-time transcription support"
+---
+
+## Overview
+
+The `SpeechController` class provides a wrapper around Android's `SpeechRecognizer` for voice input functionality. It supports real-time partial results, final transcription, and comprehensive error handling.
+
+**Location**: `com.demodogo.ev_sum_2.services.SpeechController`
+
+## Constructor
+
+```kotlin
+class SpeechController(
+    context: Context,
+    private val locale: Locale = Locale.forLanguageTag("es-CL")
+)
+```
+
+<ParamField path="context" type="Context" required>
+  The Android application context required for creating the speech recognizer
+</ParamField>
+
+<ParamField path="locale" type="Locale" default='Locale.forLanguageTag("es-CL")'>
+  The locale for speech recognition. Defaults to Spanish (Chile)
+</ParamField>
+
+## Properties
+
+The controller initializes with the following configuration:
+
+- **Language Model**: `LANGUAGE_MODEL_FREE_FORM` for natural speech
+- **Partial Results**: Enabled for real-time transcription
+- **Prompt**: "Habla ahora..." (Speak now...)
+
+## Methods
+
+### setListener
+
+Configures callback functions for speech recognition events.
+
+```kotlin
+fun setListener(
+    onReady: () -> Unit,
+    onPartial: (String) -> Unit,
+    onFinal: (String) -> Unit,
+    onError: (Int) -> Unit,
+    onEnd: () -> Unit
+)
+```
+
+<ParamField path="onReady" type="() -> Unit" required>
+  Called when the recognizer is ready to start listening
+</ParamField>
+
+<ParamField path="onPartial" type="(String) -> Unit" required>
+  Called with partial transcription results as the user speaks. Only invoked when the partial text is not blank.
+</ParamField>
+
+<ParamField path="onFinal" type="(String) -> Unit" required>
+  Called with the final transcription result when the user stops speaking
+</ParamField>
+
+<ParamField path="onError" type="(Int) -> Unit" required>
+  Called when an error occurs. Receives a `SpeechRecognizer` error code.
+</ParamField>
+
+<ParamField path="onEnd" type="() -> Unit" required>
+  Called when speech input ends
+</ParamField>
+
+<Note>
+  The `onPartial` callback filters out blank text automatically. You will only receive non-empty partial results.
+</Note>
+
+#### Usage Example
+
+```kotlin
+val speechController = SpeechController(context)
+
+speechController.setListener(
+    onReady = {
+        println("Ready to listen")
+        showListeningIndicator()
+    },
+    onPartial = { text ->
+        println("Partial: $text")
+        updateTranscription(text)
+    },
+    onFinal = { text ->
+        println("Final: $text")
+        saveTranscription(text)
+    },
+    onError = { errorCode ->
+        println("Error: $errorCode")
+        handleError(errorCode)
+    },
+    onEnd = {
+        println("Speech ended")
+        hideListeningIndicator()
+    }
+)
+```
+
+---
+
+### start
+
+Starts listening for speech input.
+
+```kotlin
+fun start()
+```
+
+<Warning>
+  Ensure you have set up the listener using `setListener()` before calling `start()`, otherwise you won't receive any callbacks.
+</Warning>
+
+#### Usage Example
+
+```kotlin
+val speechController = SpeechController(context)
+speechController.setListener(
+    onReady = { /* ... */ },
+    onPartial = { /* ... */ },
+    onFinal = { /* ... */ },
+    onError = { /* ... */ },
+    onEnd = { /* ... */ }
+)
+speechController.start()
+```
+
+---
+
+### stop
+
+Stops listening for speech input.
+
+```kotlin
+fun stop()
+```
+
+<Note>
+  Calling `stop()` will trigger the `onFinal` callback with the current transcription result.
+</Note>
+
+#### Usage Example
+
+```kotlin
+// Stop listening manually
+speechController.stop()
+```
+
+---
+
+### destroy
+
+Releases all resources used by the speech recognizer.
+
+```kotlin
+fun destroy()
+```
+
+<Warning>
+  Always call `destroy()` when you're done with the controller to free up system resources. This should typically be done in your Activity's or Fragment's `onDestroy()` method.
+</Warning>
+
+#### Usage Example
+
+```kotlin
+override fun onDestroy() {
+    super.onDestroy()
+    speechController.destroy()
+}
+```
+
+## Error Codes
+
+The `onError` callback receives one of the following error codes from `SpeechRecognizer`:
+
+| Code | Constant | Description |
+|------|----------|-------------|
+| 1 | `ERROR_NETWORK_TIMEOUT` | Network operation timed out |
+| 2 | `ERROR_NETWORK` | Other network related errors |
+| 3 | `ERROR_AUDIO` | Audio recording error |
+| 4 | `ERROR_SERVER` | Server sends error status |
+| 5 | `ERROR_CLIENT` | Client side error |
+| 6 | `ERROR_SPEECH_TIMEOUT` | No speech input |
+| 7 | `ERROR_NO_MATCH` | No recognition result matched |
+| 8 | `ERROR_RECOGNIZER_BUSY` | RecognitionService busy |
+| 9 | `ERROR_INSUFFICIENT_PERMISSIONS` | Insufficient permissions |
+
+### Handling Errors
+
+```kotlin
+fun handleSpeechError(errorCode: Int) {
+    val message = when (errorCode) {
+        SpeechRecognizer.ERROR_AUDIO -> "Error de audio"
+        SpeechRecognizer.ERROR_CLIENT -> "Error del cliente"
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Permisos insuficientes"
+        SpeechRecognizer.ERROR_NETWORK -> "Error de red"
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Tiempo de espera de red agotado"
+        SpeechRecognizer.ERROR_NO_MATCH -> "No se encontró coincidencia"
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Reconocedor ocupado"
+        SpeechRecognizer.ERROR_SERVER -> "Error del servidor"
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No se detectó voz"
+        else -> "Error desconocido"
+    }
+    showError(message)
+}
+```
+
+## Permission Requirements
+
+<Warning>
+  Speech recognition requires the `RECORD_AUDIO` permission:
+</Warning>
+
+```xml
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+```
+
+### Requesting Permission
+
+```kotlin
+val recordAudioPermission = registerForActivityResult(
+    ActivityResultContracts.RequestPermission()
+) { isGranted ->
+    if (isGranted) {
+        speechController.start()
+    } else {
+        showPermissionDeniedMessage()
+    }
+}
+
+recordAudioPermission.launch(Manifest.permission.RECORD_AUDIO)
+```
+
+## Complete Usage Example
+
+```kotlin
+class VoiceInputActivity : AppCompatActivity() {
+    private lateinit var speechController: SpeechController
+    private val _transcription = MutableStateFlow("")
+    val transcription: StateFlow<String> = _transcription.asStateFlow()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        speechController = SpeechController(this)
+        setupSpeechRecognition()
+    }
+
+    private fun setupSpeechRecognition() {
+        speechController.setListener(
+            onReady = {
+                showStatus("Listening...")
+            },
+            onPartial = { text ->
+                _transcription.value = text
+            },
+            onFinal = { text ->
+                _transcription.value = text
+                saveResult(text)
+            },
+            onError = { errorCode ->
+                handleError(errorCode)
+                showStatus("Error occurred")
+            },
+            onEnd = {
+                showStatus("Stopped")
+            }
+        )
+    }
+
+    fun startListening() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) 
+            == PackageManager.PERMISSION_GRANTED) {
+            speechController.start()
+        } else {
+            requestPermissions(
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                REQUEST_RECORD_AUDIO
+            )
+        }
+    }
+
+    fun stopListening() {
+        speechController.stop()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        speechController.destroy()
+    }
+
+    companion object {
+        private const val REQUEST_RECORD_AUDIO = 1
+    }
+}
+```
+
+## Lifecycle Management
+
+<Note>
+  Follow these best practices for managing the speech controller lifecycle:
+</Note>
+
+1. **Create** the controller in `onCreate()` or when needed
+2. **Set listener** before starting recognition
+3. **Start/Stop** recognition as needed
+4. **Destroy** in `onDestroy()` to release resources
+
+```kotlin
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    speechController = SpeechController(this)
+    speechController.setListener(/* ... */)
+}
+
+override fun onDestroy() {
+    super.onDestroy()
+    speechController.destroy()
+}
+```
+
+## See Also
+
+- [TextToSpeechController](/api/services/tts-controller) - Text-to-speech output controller
+- [Android SpeechRecognizer](https://developer.android.com/reference/android/speech/SpeechRecognizer) - Official documentation

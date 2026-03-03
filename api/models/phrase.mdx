@@ -1,0 +1,200 @@
+---
+title: "Phrase"
+description: "Domain model representing a user phrase"
+---
+
+## Overview
+
+The `Phrase` data class represents a text phrase saved by a user in the EV Sum 2 application. Each phrase has a unique identifier, text content, and creation timestamp.
+
+## Class Definition
+
+```kotlin
+data class Phrase(
+    val id: String = "",
+    val text: String = "",
+    val createdAtMillis: Long = 0L
+)
+```
+
+## Properties
+
+<ParamField path="id" type="String" default='""'>
+  The unique identifier for the phrase, typically assigned by Firestore
+</ParamField>
+
+<ParamField path="text" type="String" default='""'>
+  The actual text content of the phrase
+</ParamField>
+
+<ParamField path="createdAtMillis" type="Long" default="0L">
+  The creation timestamp in milliseconds since epoch (Unix timestamp)
+</ParamField>
+
+## Usage Examples
+
+### Creating a Phrase instance
+
+```kotlin
+val phrase = Phrase(
+    id = "phrase123",
+    text = "Hello world",
+    createdAtMillis = System.currentTimeMillis()
+)
+```
+
+### Creating from Firestore document
+
+```kotlin
+val documentSnapshot = // ... from Firestore
+val phrase = Phrase(
+    id = documentSnapshot.id,
+    text = documentSnapshot.getString("text") ?: "",
+    createdAtMillis = documentSnapshot.getLong("createdAt") ?: 0L
+)
+```
+
+### Default instance
+
+```kotlin
+// Creates an empty phrase with default values
+val emptyPhrase = Phrase()
+```
+
+## Data Class Features
+
+As a Kotlin data class, `Phrase` automatically provides:
+
+- **equals()**: Compares two phrases based on their properties
+- **hashCode()**: Generates hash code based on properties
+- **toString()**: Returns a string representation of the phrase
+- **copy()**: Creates a copy with optionally modified properties
+- **componentN()**: Enables destructuring declarations
+
+### Copy with modifications
+
+```kotlin
+val phrase = Phrase(
+    id = "phrase123",
+    text = "Original text",
+    createdAtMillis = 1234567890L
+)
+
+// Update only the text
+val updatedPhrase = phrase.copy(text = "Updated text")
+```
+
+### Destructuring
+
+```kotlin
+val phrase = Phrase(
+    id = "phrase123",
+    text = "Hello world",
+    createdAtMillis = 1234567890L
+)
+
+val (id, text, timestamp) = phrase
+println("Phrase ID: $id")
+println("Text: $text")
+println("Created at: $timestamp")
+```
+
+## Timestamp Formatting
+
+### Converting to readable date
+
+```kotlin
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+fun Phrase.formattedDate(pattern: String = "dd/MM/yyyy HH:mm"): String {
+    val dateFormat = SimpleDateFormat(pattern, Locale.getDefault())
+    return dateFormat.format(Date(createdAtMillis))
+}
+
+// Usage
+val phrase = Phrase(
+    id = "phrase123",
+    text = "Hello world",
+    createdAtMillis = System.currentTimeMillis()
+)
+println("Created: ${phrase.formattedDate()}")
+```
+
+### Relative time
+
+```kotlin
+import java.util.concurrent.TimeUnit
+
+fun Phrase.timeAgo(): String {
+    val now = System.currentTimeMillis()
+    val diff = now - createdAtMillis
+    
+    return when {
+        diff < TimeUnit.MINUTES.toMillis(1) -> "Just now"
+        diff < TimeUnit.HOURS.toMillis(1) -> {
+            "${TimeUnit.MILLISECONDS.toMinutes(diff)} minutes ago"
+        }
+        diff < TimeUnit.DAYS.toMillis(1) -> {
+            "${TimeUnit.MILLISECONDS.toHours(diff)} hours ago"
+        }
+        else -> "${TimeUnit.MILLISECONDS.toDays(diff)} days ago"
+    }
+}
+
+// Usage
+println(phrase.timeAgo()) // "5 minutes ago"
+```
+
+## Validation
+
+```kotlin
+fun Phrase.isValid(): Boolean {
+    return id.isNotBlank() && text.isNotBlank() && createdAtMillis > 0
+}
+
+fun Phrase.isEmpty(): Boolean {
+    return text.isBlank()
+}
+
+// Usage
+val phrase = Phrase(id = "phrase123", text = "Hello", createdAtMillis = 123456L)
+if (phrase.isValid()) {
+    // Proceed with phrase operations
+}
+```
+
+## Integration with LazyColumn
+
+```kotlin
+@Composable
+fun PhraseList(phrases: List<Phrase>) {
+    LazyColumn {
+        items(phrases) { phrase ->
+            PhraseItem(
+                text = phrase.text,
+                timestamp = phrase.formattedDate(),
+                onClick = { /* Handle click */ }
+            )
+        }
+    }
+}
+```
+
+## Sorting
+
+```kotlin
+// Sort by newest first
+val sortedByNewest = phrases.sortedByDescending { it.createdAtMillis }
+
+// Sort by oldest first
+val sortedByOldest = phrases.sortedBy { it.createdAtMillis }
+
+// Sort alphabetically by text
+val sortedByText = phrases.sortedBy { it.text }
+```
+
+## Source Location
+
+`com.demodogo.ev_sum_2.domain.models.Phrase`

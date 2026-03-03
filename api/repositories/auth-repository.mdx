@@ -1,0 +1,196 @@
+---
+title: "AuthRepository"
+description: "Repository for managing user authentication with Firebase Auth"
+---
+
+## Overview
+
+The `AuthRepository` class handles all authentication operations including login, registration, password reset, and authentication state management using Firebase Authentication.
+
+## Class Definition
+
+```kotlin
+class AuthRepository(
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+)
+```
+
+<ParamField path="auth" type="FirebaseAuth" default="FirebaseAuth.getInstance()">
+  Firebase Authentication instance used for all auth operations
+</ParamField>
+
+## Methods
+
+### login
+
+Authenticates a user with email and password.
+
+```kotlin
+suspend fun login(email: String, password: String)
+```
+
+<ParamField path="email" type="String" required>
+  The user's email address
+</ParamField>
+
+<ParamField path="password" type="String" required>
+  The user's password
+</ParamField>
+
+**Example:**
+
+```kotlin
+val authRepository = AuthRepository()
+try {
+    authRepository.login("user@example.com", "password123")
+    // User successfully logged in
+} catch (e: Exception) {
+    // Handle authentication error
+}
+```
+
+### register
+
+Creates a new user account with email and password.
+
+```kotlin
+suspend fun register(email: String, password: String)
+```
+
+<ParamField path="email" type="String" required>
+  The email address for the new account
+</ParamField>
+
+<ParamField path="password" type="String" required>
+  The password for the new account
+</ParamField>
+
+**Example:**
+
+```kotlin
+val authRepository = AuthRepository()
+try {
+    authRepository.register("newuser@example.com", "securePassword123")
+    // Account created successfully
+} catch (e: Exception) {
+    // Handle registration error
+}
+```
+
+### sendPasswordReset
+
+Sends a password reset email to the specified address.
+
+```kotlin
+suspend fun sendPasswordReset(email: String)
+```
+
+<ParamField path="email" type="String" required>
+  The email address to send the password reset link to
+</ParamField>
+
+**Example:**
+
+```kotlin
+val authRepository = AuthRepository()
+try {
+    authRepository.sendPasswordReset("user@example.com")
+    // Password reset email sent
+} catch (e: Exception) {
+    // Handle error
+}
+```
+
+### logout
+
+Signs out the current user.
+
+```kotlin
+fun logout()
+```
+
+**Example:**
+
+```kotlin
+val authRepository = AuthRepository()
+authRepository.logout()
+// User signed out
+```
+
+### authStateFlow
+
+Returns a Flow that emits the current authentication state whenever it changes.
+
+```kotlin
+fun authStateFlow(): Flow<FirebaseUser?>
+```
+
+<ResponseField name="Flow<FirebaseUser?>" type="Flow">
+  A Flow that emits the current FirebaseUser when authenticated, or null when signed out
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val authRepository = AuthRepository()
+authRepository.authStateFlow().collect { user ->
+    if (user != null) {
+        // User is logged in
+        println("Logged in as: ${user.email}")
+    } else {
+        // User is logged out
+        println("Not authenticated")
+    }
+}
+```
+
+### isLoggedIn
+
+Checks if a user is currently authenticated.
+
+```kotlin
+fun isLoggedIn(): Boolean
+```
+
+<ResponseField name="Boolean" type="Boolean">
+  Returns true if a user is currently logged in, false otherwise
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val authRepository = AuthRepository()
+if (authRepository.isLoggedIn()) {
+    // User is authenticated
+} else {
+    // User is not authenticated
+}
+```
+
+### currentEmail
+
+Retrieves the email address of the currently authenticated user.
+
+```kotlin
+fun currentEmail(): String?
+```
+
+<ResponseField name="String?" type="String?">
+  Returns the current user's email address, or null if no user is logged in
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val authRepository = AuthRepository()
+val email = authRepository.currentEmail()
+if (email != null) {
+    println("Current user: $email")
+} else {
+    println("No user logged in")
+}
+```
+
+## Source Location
+
+`com.demodogo.ev_sum_2.data.repositories.AuthRepository`

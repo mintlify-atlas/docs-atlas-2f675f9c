@@ -1,0 +1,281 @@
+---
+title: "RegisterScreen"
+description: "User registration screen with email/password creation and voice dictation support"
+---
+
+## Overview
+
+The `RegisterScreen` allows new users to create accounts in the EV Sum 2 application. It features email and password input fields with comprehensive validation, voice dictation support for accessibility, and real-time feedback on registration success or errors.
+
+**File Location:** `com.demodogo.ev_sum_2.ui.auth.RegisterScreen.kt:70`
+
+## Function Signature
+
+```kotlin
+@Composable
+fun RegisterScreen(
+    onBackToLogin: () -> Unit
+)
+```
+
+## Parameters
+
+<ParamField path="onBackToLogin" type="() -> Unit" required>
+  Callback function invoked when the user wants to return to the login screen. Triggered by clicking "¿Ya tienes cuenta? Inicia sesión".
+</ParamField>
+
+## State Management
+
+### Registration State
+<ResponseField name="email" type="String">
+  Stores the user's email input. Spaces are automatically filtered out during input.
+</ResponseField>
+
+<ResponseField name="password" type="String">
+  Stores the user's password input. Spaces are automatically filtered out during input.
+</ResponseField>
+
+<ResponseField name="passwordVisible" type="Boolean">
+  Controls whether the password is displayed as plain text or masked with dots.
+</ResponseField>
+
+<ResponseField name="message" type="String?">
+  Displays feedback messages to the user (validation errors or success confirmation).
+</ResponseField>
+
+<ResponseField name="isError" type="Boolean">
+  Determines whether the message card should use error or success styling.
+</ResponseField>
+
+### Voice Dictation State
+<ResponseField name="dictationTarget" type="DictationTarget">
+  Specifies which field is being filled via voice (EMAIL or PASSWORD).
+</ResponseField>
+
+<ResponseField name="isListening" type="Boolean">
+  Indicates whether the speech recognition service is actively listening.
+</ResponseField>
+
+<ResponseField name="speechError" type="String?">
+  Stores error messages related to voice recognition failures.
+</ResponseField>
+
+<ResponseField name="showDictationDialog" type="Boolean">
+  Controls the visibility of the field selection dialog for voice dictation.
+</ResponseField>
+
+<ResponseField name="shouldStartListening" type="Boolean">
+  Flag to trigger speech recognition after microphone permission is granted.
+</ResponseField>
+
+## Services & Controllers
+
+### AuthService
+Handles user registration:
+- `register(email: String, password: String)` - Creates a new user account with the provided credentials
+
+### SpeechController
+Manages speech recognition for voice input:
+- `setListener()` - Configures callbacks for speech recognition events
+- `start()` - Begins listening for speech input
+- `stop()` - Stops the speech recognition service
+- `destroy()` - Cleans up speech recognition resources
+
+## Input Validation
+
+The RegisterScreen performs comprehensive validation before account creation:
+
+```kotlin RegisterScreen.kt:235-263
+Button(
+    onClick = {
+        val cleanEmail = email.trim()
+        val validationError = when {
+            cleanEmail.isBlank() || password.isBlank() ->
+                "Completa tu email y contraseña"
+            !Validators.isValidEmail(cleanEmail) ->
+                "Email inválido (ej: nombre@dominio.com)"
+            !Validators.isValidPassword(password) ->
+                "Contraseña inválida (mín. 6, 1 letra y 1 número)"
+            else -> null
+        }
+
+        if (validationError != null) {
+            message = validationError
+            isError = true
+        } else {
+            scope.launch {
+                try {
+                    authService.register(cleanEmail, password);
+                    message = "Cuenta creada exitosamente"
+                    isError = false
+                    email = ""
+                    password = ""
+                } catch(e: Exception) {
+                    message = e.message ?: "Error al crear cuenta"
+                    isError = true
+                }
+            }
+        }
+    },
+    // ...
+)
+```
+
+### Validation Rules
+
+1. **Email Validation** - Uses `Validators.isValidEmail()` to ensure proper email format
+2. **Password Requirements** - Uses `Validators.isValidPassword()` which requires:
+   - Minimum 6 characters
+   - At least 1 letter
+   - At least 1 number
+3. **Empty Field Check** - Ensures both email and password are provided
+
+## User Interactions
+
+### Registration Flow
+
+1. User enters email address
+2. User enters password (with show/hide toggle)
+3. User clicks "Registrar" button
+4. Client-side validation runs
+5. If validation passes, account is created via `AuthService.register()`
+6. Success message is displayed and fields are cleared
+7. User can navigate back to login screen
+
+### Voice Dictation
+
+The screen supports voice input for accessibility:
+
+1. User clicks the "Voz" button
+2. Dialog prompts user to select field (Email or Contraseña)
+3. Microphone permission is requested if needed
+4. Speech recognition begins
+5. Partial results update the field in real-time
+6. Final result is normalized and set when complete
+
+```kotlin RegisterScreen.kt:115-140
+LaunchedEffect(Unit) {
+    speechController.setListener(
+        onReady = {
+            isListening = true
+            speechError = null
+        },
+        onPartial = { partial ->
+            when (dictationTarget) {
+                DictationTarget.EMAIL -> email = normalizeEmailFromSpeech(partial)
+                DictationTarget.PASSWORD -> password = normalizePasswordFromSpeech(partial)
+            }
+        },
+        onFinal = { final ->
+            isListening = false
+            when (dictationTarget) {
+                DictationTarget.EMAIL -> email = normalizeEmailFromSpeech(final)
+                DictationTarget.PASSWORD -> password = normalizePasswordFromSpeech(final)
+            }
+        },
+        onError = { code ->
+            isListening = false
+            speechError = getFriendlyErrorMessage(code)
+        },
+        onEnd = { isListening = false }
+    )
+}
+```
+
+### Password Visibility Toggle
+
+Users can toggle password visibility using the eye icon:
+
+```kotlin RegisterScreen.kt:212-217
+trailingIcon = {
+    val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+    val description = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña"
+    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+        Icon(imageVector = image, contentDescription = description)
+    }
+}
+```
+
+## Error Handling
+
+The screen provides user-friendly error messages for common speech recognition issues:
+
+```kotlin RegisterScreen.kt:88-97
+fun getFriendlyErrorMessage(code: Int): String {
+    return when (code) {
+        7 -> "No se pudo conectar al servicio de voz. Revisa tu internet."
+        9 -> "Permiso de micrófono denegado."
+        2 -> "Error de red. Intenta de nuevo."
+        3 -> "No te escuchamos bien, intenta hablar más fuerte."
+        5 -> "El micrófono está ocupado por otra app."
+        else -> "Hubo un problema con el dictado. Intenta de nuevo."
+    }
+}
+```
+
+## UI Components
+
+The RegisterScreen uses Material 3 components:
+
+- **Surface** - Root container with background color
+- **OutlinedTextField** - Email and password input fields
+- **Button** - Registration action and voice dictation button
+- **Card** - Success/error message display
+- **Icon** - Visual indicators (PersonAdd, Email, Lock, Mic)
+- **AlertDialog** - Field selection dialog for voice dictation
+- **IconButton** - Password visibility toggle
+
+## Permissions
+
+The screen requests the following Android permission:
+
+- `Manifest.permission.RECORD_AUDIO` - Required for voice dictation functionality
+
+```kotlin RegisterScreen.kt:99-109
+val micPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestPermission()
+) { granted ->
+    if (!granted) {
+        speechError = "Permiso de micrófono requerido."
+        shouldStartListening = false
+    } else if (shouldStartListening) {
+        speechController.start()
+        shouldStartListening = false
+    }
+}
+```
+
+## Success Handling
+
+When registration succeeds:
+
+1. Success message "Cuenta creada exitosamente" is displayed
+2. Email and password fields are cleared
+3. User can navigate back to login screen to sign in
+
+<Note>
+The screen automatically clears the input fields after successful registration, allowing the user to immediately return to the login screen without seeing their credentials.
+</Note>
+
+## Example Usage
+
+```kotlin
+NavHost(navController = navController, startDestination = "login") {
+    composable("register") {
+        RegisterScreen(
+            onBackToLogin = {
+                navController.popBackStack()
+            }
+        )
+    }
+}
+```
+
+## Best Practices
+
+1. **Input Sanitization** - Automatically removes spaces from email and password inputs
+2. **Resource Cleanup** - SpeechController is destroyed in `DisposableEffect` to prevent memory leaks
+3. **State Persistence** - User input is preserved with `rememberSaveable` across configuration changes
+4. **Clear Validation Messages** - Provides specific, actionable error messages
+5. **Accessibility** - Voice dictation provides alternative input method for users with disabilities
+6. **Security** - Password is masked by default with optional visibility toggle

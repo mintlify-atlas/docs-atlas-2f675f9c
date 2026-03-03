@@ -1,0 +1,243 @@
+---
+title: "LocationService"
+description: "Service for retrieving device location with reverse geocoding capabilities"
+---
+
+## Overview
+
+The `LocationService` class provides location functionality including GPS coordinate retrieval and reverse geocoding to convert coordinates into human-readable addresses. It handles permission checks and supports both modern and legacy Android versions.
+
+**Location**: `com.demodogo.ev_sum_2.services.LocationService`
+
+## Constructor
+
+```kotlin
+class LocationService(private val context: Context)
+```
+
+<ParamField path="context" type="Context" required>
+  The Android application context required for accessing location services and geocoding
+</ParamField>
+
+## Data Classes
+
+### LocationResult
+
+Represents a location with coordinates and optional address.
+
+```kotlin
+data class LocationResult(
+    val coords: DeviceLocation,
+    val address: String?
+)
+```
+
+<ParamField path="coords" type="DeviceLocation">
+  The GPS coordinates containing latitude and longitude
+</ParamField>
+
+<ParamField path="address" type="String?">
+  The human-readable address, or `null` if geocoding failed
+</ParamField>
+
+## Methods
+
+### hasPermission
+
+Checks if the app has location permissions.
+
+```kotlin
+fun hasPermission(): Boolean
+```
+
+**Returns**: `Boolean` - `true` if location permissions are granted, `false` otherwise
+
+#### Usage Example
+
+```kotlin
+val locationService = LocationService(context)
+
+if (locationService.hasPermission()) {
+    // Proceed with location retrieval
+} else {
+    // Request location permissions
+}
+```
+
+---
+
+### getLocationWithAddress
+
+Retrieves the device's current location with a reverse-geocoded address.
+
+```kotlin
+@RequiresPermission(anyOf = [
+    Manifest.permission.ACCESS_FINE_LOCATION,
+    Manifest.permission.ACCESS_COARSE_LOCATION
+])
+suspend fun getLocationWithAddress(): LocationResult
+```
+
+**Returns**: `LocationResult` - Contains coordinates and optional address
+
+**Throws**: `IllegalStateException` if location permission is not granted
+
+<Warning>
+  This method requires either `ACCESS_FINE_LOCATION` or `ACCESS_COARSE_LOCATION` permission. Always check permissions before calling this method.
+</Warning>
+
+<Note>
+  The address is geocoded using Spanish (Chile) locale ("es-CL"). If geocoding fails, the address will be `null`, but the coordinates will still be available.
+</Note>
+
+#### Usage Example
+
+```kotlin
+val locationService = LocationService(context)
+
+if (locationService.hasPermission()) {
+    try {
+        val result = locationService.getLocationWithAddress()
+        println("Coordinates: ${result.coords.latitude}, ${result.coords.longitude}")
+        println("Address: ${result.address ?: "Unknown"}")
+    } catch (e: IllegalStateException) {
+        println("Permission error: ${e.message}")
+    } catch (e: Exception) {
+        println("Location error: ${e.message}")
+    }
+} else {
+    // Request permissions
+}
+```
+
+---
+
+### reverseGeocodeSafe (Private)
+
+Internal method that performs reverse geocoding with error handling.
+
+```kotlin
+private suspend fun reverseGeocodeSafe(lat: Double, lon: Double): String?
+```
+
+<Note>
+  This is a private method that handles both modern (API 33+) and legacy Android geocoding APIs. It automatically falls back to `null` if geocoding fails for any reason.
+</Note>
+
+## Android Version Compatibility
+
+The service automatically handles different Android API levels:
+
+- **API 33+**: Uses the modern callback-based `Geocoder.getFromLocation()` method
+- **API < 33**: Uses the deprecated synchronous `Geocoder.getFromLocation()` method
+
+## Permission Requirements
+
+<Warning>
+  Before using `getLocationWithAddress()`, you must request and obtain one of these permissions:
+</Warning>
+
+```xml
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+```
+
+### Requesting Permissions
+
+```kotlin
+val locationPermissionRequest = registerForActivityResult(
+    ActivityResultContracts.RequestMultiplePermissions()
+) { permissions ->
+    when {
+        permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true -> {
+            // Precise location access granted
+        }
+        permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true -> {
+            // Approximate location access granted
+        }
+        else -> {
+            // No location access granted
+        }
+    }
+}
+
+locationPermissionRequest.launch(
+    arrayOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    )
+)
+```
+
+## Complete Usage Example
+
+```kotlin
+class LocationViewModel(application: Application) : AndroidViewModel(application) {
+    private val locationService = LocationService(application)
+    private val _locationState = MutableStateFlow<LocationState>(LocationState.Idle)
+    val locationState: StateFlow<LocationState> = _locationState.asStateFlow()
+
+    sealed class LocationState {
+        object Idle : LocationState()
+        object Loading : LocationState()
+        data class Success(val result: LocationResult) : LocationState()
+        data class Error(val message: String) : LocationState()
+        object PermissionDenied : LocationState()
+    }
+
+    fun checkAndGetLocation() {
+        if (!locationService.hasPermission()) {
+            _locationState.value = LocationState.PermissionDenied
+            return
+        }
+
+        viewModelScope.launch {
+            _locationState.value = LocationState.Loading
+            try {
+                val result = locationService.getLocationWithAddress()
+                _locationState.value = LocationState.Success(result)
+            } catch (e: IllegalStateException) {
+                _locationState.value = LocationState.Error("Permission not granted")
+            } catch (e: Exception) {
+                _locationState.value = LocationState.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+}
+```
+
+## Error Handling
+
+### SecurityException
+
+Thrown when location permissions are not granted:
+
+```kotlin
+try {
+    val result = locationService.getLocationWithAddress()
+} catch (e: IllegalStateException) {
+    // Handle permission error
+    showPermissionDialog()
+}
+```
+
+### Geocoding Failures
+
+Geocoding failures are handled gracefully - the address will be `null`, but coordinates are still available:
+
+```kotlin
+val result = locationService.getLocationWithAddress()
+if (result.address == null) {
+    // Show coordinates only
+    showLocation(result.coords)
+} else {
+    // Show both coordinates and address
+    showLocationWithAddress(result.coords, result.address)
+}
+```
+
+## See Also
+
+- [LocationRepository](/api/repositories/location-repository) - Underlying repository for location operations
+- [DeviceLocation Model](/api/models/device-location) - Location data model
+- [Android Location Guide](https://developer.android.com/training/location) - Official Android location documentation

@@ -1,0 +1,277 @@
+---
+title: "DeviceLocationScreen"
+description: "Screen for retrieving and displaying the device's current location with address and coordinates"
+---
+
+## Overview
+
+The `DeviceLocationScreen` provides functionality for users to retrieve their device's current location. It displays both human-readable address information and precise GPS coordinates, with features to speak the location aloud using text-to-speech and copy location data to the clipboard.
+
+**File Location:** `com.demodogo.ev_sum_2.ui.location.DeviceLocationScreen.kt:46`
+
+## Function Signature
+
+```kotlin
+@Composable
+fun DeviceLocationScreen(
+    onBack: () -> Unit
+)
+```
+
+## Parameters
+
+<ParamField path="onBack" type="() -> Unit" required>
+  Callback function invoked when the user clicks the "Volver" (Back) button. Typically navigates back to the previous screen.
+</ParamField>
+
+## State Management
+
+### Location Data State
+<ResponseField name="address" type="String?">
+  Stores the human-readable address obtained from reverse geocoding. Null if not yet retrieved or unavailable.
+</ResponseField>
+
+<ResponseField name="lat" type="Double?">
+  Stores the latitude coordinate of the device's location.
+</ResponseField>
+
+<ResponseField name="lon" type="Double?">
+  Stores the longitude coordinate of the device's location.
+</ResponseField>
+
+### UI Feedback State
+<ResponseField name="isLoading" type="Boolean">
+  Indicates whether a location fetch operation is currently in progress.
+</ResponseField>
+
+<ResponseField name="error" type="String?">
+  Stores error messages to display to the user (e.g., permission denied, location unavailable).
+</ResponseField>
+
+<ResponseField name="info" type="String?">
+  Stores informational messages to display to the user (e.g., "Ubicación actualizada", "Copiado al portapapeles").
+</ResponseField>
+
+## Services & Controllers
+
+### LocationService
+Handles location operations:
+- `getLocationWithAddress()` - Retrieves GPS coordinates and performs reverse geocoding to get address
+- `hasPermission()` - Checks if location permissions are granted
+
+### TextToSpeechController
+Provides text-to-speech functionality:
+- `speak(text: String)` - Speaks the provided location information aloud
+- `destroy()` - Cleans up TTS resources
+
+## User Interactions
+
+### Retrieving Location
+
+The location fetch process handles permissions and errors gracefully:
+
+```kotlin DeviceLocationScreen.kt:88-105
+fun fetchLocation() {
+    scope.launch {
+        isLoading = true
+        error = null
+        info = null
+        try {
+            val result = service.getLocationWithAddress()
+            lat = result.coords.latitude
+            lon = result.coords.longitude
+            address = result.address
+            info = "Ubicación actualizada."
+        } catch (e: Exception) {
+            error = e.message ?: "Error obteniendo ubicación."
+        } finally {
+            isLoading = false
+        }
+    }
+}
+```
+
+When user clicks "Obtener ubicación":
+1. Check if location permissions are granted
+2. If not granted, request permissions
+3. If granted, fetch location with address
+4. Display results or error message
+
+### Permission Handling
+
+The screen requests location permissions when needed:
+
+```kotlin DeviceLocationScreen.kt:107-119
+val permissionLauncher = rememberLauncherForActivityResult(
+    ActivityResultContracts.RequestMultiplePermissions()
+) { perms ->
+    val ok = (perms[Manifest.permission.ACCESS_FINE_LOCATION] == true) ||
+            (perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
+
+    if (!ok) {
+        error = "Permiso de ubicación denegado."
+        info = null
+    } else {
+        fetchLocation()
+    }
+}
+```
+
+### Text-to-Speech Location
+
+The screen can speak the location information:
+
+```kotlin DeviceLocationScreen.kt:72-77
+fun spokenText(): String {
+    val a = address?.takeIf { it.isNotBlank() }
+    return if (a != null) "Tu ubicación actual es: $a"
+    else if (lat != null && lon != null) "Tu ubicación actual es latitud ${"%.5f".format(lat)} y longitud ${"%.5f".format(lon)}"
+    else "Aún no tengo tu ubicación."
+}
+```
+
+### Copy to Clipboard
+
+Users can copy location data in a formatted string:
+
+```kotlin DeviceLocationScreen.kt:79-86
+fun copyText(): String {
+    val a = address?.takeIf { it.isNotBlank() }
+    return if (a != null && lat != null && lon != null)
+        "Ubicación: $a (lat=${"%.6f".format(lat)}, lon=${"%.6f".format(lon)})"
+    else if (lat != null && lon != null)
+        "Ubicación: lat=${"%.6f".format(lat)}, lon=${"%.6f".format(lon)}"
+    else "Ubicación no disponible."
+}
+```
+
+```kotlin DeviceLocationScreen.kt:66-70
+fun copy(text: String) {
+    clipboard.setText(AnnotatedString(text))
+    info = "Copiado al portapapeles."
+    error = null
+}
+```
+
+## UI Components
+
+The DeviceLocationScreen uses Material 3 components:
+
+- **Surface** - Root container with background color
+- **Column** - Main vertical layout with spacing
+- **Card** - Display containers for location data, errors, and info messages
+- **Button** - Primary action to obtain location
+- **OutlinedButton** - Secondary actions (speak, copy, back)
+- **LinearProgressIndicator** - Loading state indicator
+- **Icon** - Visual indicators (MyLocation, VolumeUp, ContentCopy)
+- **Row** - Horizontal layout for action buttons
+
+## Permissions
+
+The screen requests the following Android permissions:
+
+- `Manifest.permission.ACCESS_FINE_LOCATION` - For precise GPS coordinates
+- `Manifest.permission.ACCESS_COARSE_LOCATION` - For approximate location
+
+<Note>
+The screen accepts either FINE or COARSE location permission. If the user grants only COARSE, the location will be less precise but still functional.
+</Note>
+
+## Location Data Display
+
+The location information is displayed in a card:
+
+```kotlin DeviceLocationScreen.kt:128-142
+Card(
+    shape = RoundedCornerShape(16.dp),
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f))
+) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Dirección:", style = MaterialTheme.typography.titleMedium)
+        Text(address ?: "—", style = MaterialTheme.typography.bodyLarge)
+
+        Text("Coordenadas:", style = MaterialTheme.typography.titleMedium)
+        Text(
+            if (lat != null && lon != null) "lat=${"%.6f".format(lat)}, lon=${"%.6f".format(lon)}" else "—",
+            style = MaterialTheme.typography.bodyLarge
+        )
+    }
+}
+```
+
+The display shows:
+- **Dirección** - Full address string or "—" if unavailable
+- **Coordenadas** - Latitude and longitude with 6 decimal places or "—" if unavailable
+
+## Error and Info Messages
+
+Feedback messages are displayed in styled cards:
+
+```kotlin DeviceLocationScreen.kt:146-158
+if (error != null) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.10f))
+    ) { Text(error!!, modifier = Modifier.padding(14.dp)) }
+}
+
+if (info != null) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f))
+    ) { Text(info!!, modifier = Modifier.padding(14.dp)) }
+}
+```
+
+## Example Usage
+
+```kotlin
+NavHost(navController = navController, startDestination = "home") {
+    composable("location") {
+        DeviceLocationScreen(
+            onBack = {
+                navController.popBackStack()
+            }
+        )
+    }
+}
+```
+
+## Action Buttons
+
+The screen provides three action buttons:
+
+1. **Obtener ubicación** - Fetches current location (disabled while loading)
+2. **Hablar** - Speaks location using TTS
+3. **Copiar** - Copies formatted location to clipboard
+4. **Volver** - Returns to previous screen
+
+```kotlin DeviceLocationScreen.kt:160-177
+Button(
+    onClick = {
+        if (service.hasPermission()) fetchLocation()
+        else permissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        )
+    },
+    enabled = !isLoading,
+    modifier = Modifier.fillMaxWidth(),
+    shape = RoundedCornerShape(16.dp)
+) {
+    Icon(Icons.Default.MyLocation, contentDescription = null)
+    Spacer(Modifier.width(10.dp))
+    Text("Obtener ubicación")
+}
+```
+
+## Best Practices
+
+1. **Resource Cleanup** - TTS controller is destroyed in `DisposableEffect` to prevent memory leaks
+2. **Graceful Degradation** - Shows coordinates even if address lookup fails
+3. **User Feedback** - Clear loading states and error messages
+4. **Accessibility** - Text-to-speech support for reading location aloud
+5. **Permission Handling** - Gracefully requests and handles permission denials
+6. **State Persistence** - Location data preserved with `rememberSaveable` across configuration changes

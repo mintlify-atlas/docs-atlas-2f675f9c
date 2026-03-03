@@ -1,0 +1,288 @@
+---
+title: "LoginScreen"
+description: "Authentication screen with email/password login and voice dictation support"
+---
+
+## Overview
+
+The `LoginScreen` provides the user authentication interface for the EV Sum 2 application. It features traditional email/password login with additional accessibility through voice dictation for both email and password fields. The screen includes input validation, error handling, and navigation to registration and password recovery flows.
+
+**File Location:** `com.demodogo.ev_sum_2.ui.auth.LoginScreen.kt:71`
+
+## Function Signature
+
+```kotlin
+@Composable
+fun LoginScreen(
+    onLoginClick: () -> Unit,
+    onRegisterClick: () -> Unit,
+    onRecoverClick: () -> Unit
+)
+```
+
+## Parameters
+
+<ParamField path="onLoginClick" type="() -> Unit" required>
+  Callback function invoked when login is successful. Typically navigates to the home screen.
+</ParamField>
+
+<ParamField path="onRegisterClick" type="() -> Unit" required>
+  Callback function invoked when user wants to create a new account. Navigates to the registration screen.
+</ParamField>
+
+<ParamField path="onRecoverClick" type="() -> Unit" required>
+  Callback function invoked when user clicks "¿Olvidaste tu contraseña?". Navigates to the password recovery screen.
+</ParamField>
+
+## State Management
+
+### Authentication State
+<ResponseField name="email" type="String">
+  Stores the user's email input. Spaces are automatically filtered out.
+</ResponseField>
+
+<ResponseField name="password" type="String">
+  Stores the user's password input. Spaces are automatically filtered out.
+</ResponseField>
+
+<ResponseField name="passwordVisible" type="Boolean">
+  Controls whether the password is displayed as plain text or masked.
+</ResponseField>
+
+<ResponseField name="message" type="String?">
+  Displays feedback messages to the user (success or error).
+</ResponseField>
+
+<ResponseField name="isError" type="Boolean">
+  Determines whether the message should be styled as an error or success.
+</ResponseField>
+
+### Voice Dictation State
+<ResponseField name="dictationTarget" type="DictationTarget">
+  Specifies which field is being filled via voice (EMAIL or PASSWORD).
+</ResponseField>
+
+<ResponseField name="isListening" type="Boolean">
+  Indicates whether the speech recognition service is actively listening.
+</ResponseField>
+
+<ResponseField name="speechError" type="String?">
+  Stores voice recognition error messages.
+</ResponseField>
+
+<ResponseField name="showDictationDialog" type="Boolean">
+  Controls the visibility of the dialog that lets users choose which field to dictate.
+</ResponseField>
+
+<ResponseField name="shouldStartListening" type="Boolean">
+  Flag to trigger speech recognition after microphone permission is granted.
+</ResponseField>
+
+## Services & Controllers
+
+### AuthService
+Handles authentication operations:
+- `login(email: String, password: String)` - Authenticates user credentials
+
+### SpeechController
+Manages speech recognition:
+- `setListener()` - Configures callbacks for speech events
+- `start()` - Begins listening for speech input
+- `stop()` - Stops the speech recognition service
+- `destroy()` - Cleans up speech recognition resources
+
+## Speech Recognition Callbacks
+
+The LoginScreen configures the following speech recognition listeners:
+
+```kotlin LoginScreen.kt:118-146
+speechController.setListener(
+    onReady = {
+        isListening = true
+        speechError = null
+    },
+    onPartial = { partial ->
+        when (dictationTarget) {
+            DictationTarget.EMAIL -> email = normalizeEmailFromSpeech(partial)
+            DictationTarget.PASSWORD -> password = normalizePasswordFromSpeech(partial)
+        }
+    },
+    onFinal = { final ->
+        isListening = false
+        when (dictationTarget) {
+            DictationTarget.EMAIL -> email = normalizeEmailFromSpeech(final)
+            DictationTarget.PASSWORD -> password = normalizePasswordFromSpeech(final)
+        }
+    },
+    onError = { code ->
+        isListening = false
+        speechError = getFriendlyErrorMessage(code)
+    },
+    onEnd = {
+        isListening = false
+    }
+)
+```
+
+## User Interactions
+
+### Email and Password Login
+
+The login flow includes comprehensive validation:
+
+```kotlin LoginScreen.kt:260-284
+Button(
+    onClick = {
+        val cleanEmail = email.trim()
+        when {
+            cleanEmail.isBlank() || password.isBlank() -> {
+                message = "Completa tu email y contraseña"
+                isError = true
+            }
+            !cleanEmail.isBasicEmailValid() -> {
+                message = "Email inválido (ej: nombre@dominio.com)"
+                isError = true
+            }
+            else -> {
+                scope.launch {
+                    try {
+                        authService.login(cleanEmail, password)
+                        message = null
+                        isError = false
+                        onLoginClick()
+                    } catch(e: Exception) {
+                        message = e.message ?: "Credenciales inválidas"
+                        isError = true
+                    }
+                }
+            }
+        }
+    },
+    // ...
+)
+```
+
+### Voice Dictation Workflow
+
+1. User clicks the "Voz" button
+2. Dialog appears asking which field to dictate (Email or Contraseña)
+3. User selects a field
+4. Microphone permission is requested if not already granted
+5. Speech recognition starts
+6. Partial results update the field in real-time
+7. Final result is normalized and set when user stops speaking
+
+<Note>
+The voice dictation feature uses normalization functions `normalizeEmailFromSpeech()` and `normalizePasswordFromSpeech()` to convert spoken words into proper email and password formats.
+</Note>
+
+### Password Visibility Toggle
+
+Users can show/hide password text:
+
+```kotlin LoginScreen.kt:217-228
+visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+trailingIcon = {
+    val image = if (passwordVisible)
+        Icons.Filled.Visibility
+    else Icons.Filled.VisibilityOff
+
+    val description = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña"
+
+    IconButton(onClick = {passwordVisible = !passwordVisible}){
+        Icon(imageVector  = image, description)
+    }
+}
+```
+
+## Error Handling
+
+The screen provides user-friendly error messages for speech recognition issues:
+
+```kotlin LoginScreen.kt:91-100
+fun getFriendlyErrorMessage(code: Int): String {
+    return when (code) {
+        7 -> "No se pudo conectar al servicio de voz. Revisa tu internet."
+        9 -> "Permiso de micrófono denegado."
+        2 -> "Error de red. Intenta de nuevo."
+        3 -> "No te escuchamos bien, intenta hablar más fuerte."
+        5 -> "El micrófono está ocupado por otra app."
+        else -> "Hubo un problema con el dictado. Intenta de nuevo."
+    }
+}
+```
+
+## UI Components
+
+The LoginScreen utilizes Material 3 components:
+
+- **Surface** - Root container with background color
+- **OutlinedTextField** - Email and password input fields
+- **Button** - Primary login action and voice dictation
+- **TextButton** - Registration link
+- **Card** - Message display (errors and success)
+- **Icon** - Visual indicators (verified user, email, lock, mic)
+- **AlertDialog** - Field selection for voice dictation
+- **Divider** - Visual separator for alternative login methods
+
+## Input Validation
+
+The screen validates user input before attempting login:
+
+1. **Empty Fields Check** - Ensures both email and password are provided
+2. **Email Format Validation** - Uses `isBasicEmailValid()` extension function
+3. **Automatic Space Removal** - Prevents accidental spaces in credentials
+
+```kotlin LoginScreen.kt:189
+onValueChange = { if (!it.contains(' ')) email = it }
+```
+
+## Permissions
+
+The screen requests the following Android permission for voice dictation:
+
+- `Manifest.permission.RECORD_AUDIO` - Required for speech recognition
+
+```kotlin LoginScreen.kt:102-112
+val micPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestPermission()
+) { granted ->
+    if (!granted) {
+        speechError = "Permiso de micrófono requerido."
+        shouldStartListening = false
+    } else if (shouldStartListening) {
+        speechController.start()
+        shouldStartListening = false
+    }
+}
+```
+
+## Example Usage
+
+```kotlin
+NavHost(navController = navController, startDestination = "login") {
+    composable("login") {
+        LoginScreen(
+            onLoginClick = {
+                navController.navigate("home") {
+                    popUpTo("login") { inclusive = true }
+                }
+            },
+            onRegisterClick = {
+                navController.navigate("register")
+            },
+            onRecoverClick = {
+                navController.navigate("recover")
+            }
+        )
+    }
+}
+```
+
+## Best Practices
+
+1. **Resource Cleanup** - SpeechController is destroyed in `DisposableEffect` to prevent memory leaks
+2. **State Persistence** - All user input is preserved with `rememberSaveable` across configuration changes
+3. **Accessibility** - Voice dictation provides an alternative input method for users with mobility challenges
+4. **User Feedback** - Clear, actionable error messages guide users to resolve issues
+5. **Security** - Password masking is enabled by default with optional visibility toggle

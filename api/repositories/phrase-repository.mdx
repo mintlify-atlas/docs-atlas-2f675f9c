@@ -1,0 +1,188 @@
+---
+title: "PhraseRepository"
+description: "Repository for managing user phrases stored in Firestore"
+---
+
+## Overview
+
+The `PhraseRepository` class handles CRUD operations for user phrases stored in Firebase Firestore. Each user's phrases are stored in a subcollection under their user document.
+
+## Class Definition
+
+```kotlin
+class PhraseRepository(
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+)
+```
+
+<ParamField path="db" type="FirebaseFirestore" default="FirebaseFirestore.getInstance()">
+  Firestore database instance for storing and retrieving phrases
+</ParamField>
+
+<ParamField path="auth" type="FirebaseAuth" default="FirebaseAuth.getInstance()">
+  Firebase Authentication instance to get the current user ID
+</ParamField>
+
+## Private Methods
+
+### uid
+
+Retrieves the current user's ID.
+
+```kotlin
+private fun uid(): String
+```
+
+<Note>
+  This method throws `IllegalStateException` if no user is currently authenticated.
+</Note>
+
+### col
+
+Returns a reference to the current user's phrases collection.
+
+```kotlin
+private fun col(): CollectionReference
+```
+
+The collection path is: `users/{uid}/phrases`
+
+## Public Methods
+
+### add
+
+Adds a new phrase to the current user's collection.
+
+```kotlin
+suspend fun add(text: String)
+```
+
+<ParamField path="text" type="String" required>
+  The phrase text to save
+</ParamField>
+
+**Example:**
+
+```kotlin
+val phraseRepository = PhraseRepository()
+try {
+    phraseRepository.add("Hello world")
+    // Phrase added successfully
+} catch (e: IllegalStateException) {
+    // No active session
+} catch (e: Exception) {
+    // Handle error
+}
+```
+
+<Note>
+  The method automatically sets the `createdAt` timestamp to the current system time in milliseconds.
+</Note>
+
+### get
+
+Retrieves all phrases for the current user, ordered by creation date (newest first).
+
+```kotlin
+suspend fun get(): List<Phrase>
+```
+
+<ResponseField name="List<Phrase>" type="List<Phrase>">
+  A list of all user phrases, ordered by creation date in descending order
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val phraseRepository = PhraseRepository()
+try {
+    val phrases = phraseRepository.get()
+    phrases.forEach { phrase ->
+        println("${phrase.id}: ${phrase.text}")
+    }
+} catch (e: IllegalStateException) {
+    // No active session
+} catch (e: Exception) {
+    // Handle error
+}
+```
+
+### update
+
+Updates the text of an existing phrase.
+
+```kotlin
+suspend fun update(id: String, newText: String)
+```
+
+<ParamField path="id" type="String" required>
+  The unique identifier of the phrase to update
+</ParamField>
+
+<ParamField path="newText" type="String" required>
+  The new text for the phrase
+</ParamField>
+
+**Example:**
+
+```kotlin
+val phraseRepository = PhraseRepository()
+try {
+    phraseRepository.update("phraseId123", "Updated phrase text")
+    // Phrase updated successfully
+} catch (e: IllegalStateException) {
+    // No active session
+} catch (e: Exception) {
+    // Handle error
+}
+```
+
+### delete
+
+Deletes a phrase from the user's collection.
+
+```kotlin
+suspend fun delete(id: String)
+```
+
+<ParamField path="id" type="String" required>
+  The unique identifier of the phrase to delete
+</ParamField>
+
+**Example:**
+
+```kotlin
+val phraseRepository = PhraseRepository()
+try {
+    phraseRepository.delete("phraseId123")
+    // Phrase deleted successfully
+} catch (e: IllegalStateException) {
+    // No active session
+} catch (e: Exception) {
+    // Handle error
+}
+```
+
+## Error Handling
+
+<Note>
+  All methods may throw `IllegalStateException` with the message "No hay sesión activa" (No active session) if called when no user is authenticated.
+</Note>
+
+## Firestore Structure
+
+Phrases are stored with the following structure:
+
+```
+users/
+  {uid}/
+    phrases/
+      {phraseId}/
+        text: String
+        createdAt: Long
+```
+
+## Source Location
+
+`com.demodogo.ev_sum_2.data.repositories.PhraseRepository`

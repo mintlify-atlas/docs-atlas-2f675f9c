@@ -1,80 +1,182 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get the EV Sum 2 Android app running on your device in minutes
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, make sure you have:
 
-### Step 1: Set up your local environment
+- **Android Studio** (latest stable version recommended)
+- **Physical Android device** with API level 24 or higher
+- **Firebase project** with Authentication and Firestore enabled
+- **Git** installed on your machine
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+<Warning>
+  While emulators are supported, voice recognition features work best on physical devices. Google's speech recognition engine may throw errors on emulators without updated Play Store services.
+</Warning>
+
+## Quick setup
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the project to your local machine:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    git clone https://github.com/demodogo/ev_sum_2_android.git
+    cd ev_sum_2_android
+    ```
+  </Step>
+  
+  <Step title="Add Firebase configuration">
+    Download your `google-services.json` file from the Firebase Console and place it in the `app/` directory:
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    ```bash
+    app/
+    ├── build.gradle.kts
+    ├── google-services.json  # Add this file here
+    └── src/
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    <Note>
+      The `google-services.json` file connects your app to your Firebase project. Without it, authentication and Firestore features won't work.
+    </Note>
+  </Step>
+  
+  <Step title="Open in Android Studio">
+    Launch Android Studio and open the project:
+    
+    1. Click **File > Open**
+    2. Navigate to the cloned repository folder
+    3. Click **OK** to open the project
+  </Step>
+  
+  <Step title="Sync Gradle files">
+    Android Studio should automatically sync Gradle files. If not, click the **Sync Project with Gradle Files** button in the toolbar, or go to:
+    
+    **File > Sync Project with Gradle Files**
+    
+    This will download all dependencies specified in `build.gradle.kts`:
+    
+    ```kotlin app/build.gradle.kts
+    dependencies {
+        implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+        implementation("com.google.firebase:firebase-auth-ktx")
+        implementation("com.google.firebase:firebase-firestore-ktx")
+        implementation("com.google.android.gms:play-services-location:21.3.0")
+        implementation("androidx.navigation:navigation-compose:2.8.5")
+        // ... more dependencies
+    }
+    ```
+  </Step>
+  
+  <Step title="Connect your device">
+    Connect your Android device via USB and enable Developer Options:
+    
+    1. Go to **Settings > About phone**
+    2. Tap **Build number** 7 times to enable Developer Options
+    3. Go to **Settings > Developer options**
+    4. Enable **USB debugging**
+    5. Connect your device and authorize the computer when prompted
+  </Step>
+  
+  <Step title="Run the app">
+    Click the **Run 'app'** button in the Android Studio toolbar (or press `Shift + F10`):
+    
+    1. Select your connected device from the deployment target dropdown
+    2. Wait for the build to complete
+    3. The app will install and launch on your device
+    
+    <Note>
+      First build may take several minutes as Gradle downloads dependencies and compiles the project.
+    </Note>
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Verify installation
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+Once the app launches, you should see the authentication screen. The app automatically routes users based on session state:
 
-### Step 3: Go live
+```kotlin MainActivity.kt
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        ThemeStore.loadTheme(this)
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+        setContent {
+            val isDarkTheme by ThemeStore.isDarkTheme.collectAsState()
+
+            Ev_sum_2Theme(darkTheme = isDarkTheme) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AppNavGraph()  // Handles routing
+                    // Theme toggle button...
+                }
+            }
+        }
+    }
+}
+```
+
+The `RouterScreen` component evaluates the auth state in real-time:
+- **No session**: Redirects to Login screen
+- **Active session**: Redirects to Home screen
+
+## Test voice features
+
+To verify voice input is working:
+
+1. On the login screen, tap the microphone icon next to the email field
+2. Say something like: "demo arroba example punto com"
+3. The field should populate with: `demo@example.com`
+
+<Note>
+  Voice normalization converts Spanish spoken words to symbols. For example:
+  - "arroba" → `@`
+  - "punto" → `.`
+  - "guion bajo" → `_`
+  - "uno dos tres" → `123`
+</Note>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Detailed setup" icon="gear" href="/setup">
+    Learn about Firebase configuration, permissions, and advanced setup
+  </Card>
+  
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    Understand the app's Service-Repository pattern and folder structure
+  </Card>
+  
+  <Card title="Authentication" icon="lock" href="/features/authentication">
+    Explore how Firebase Authentication powers user management
+  </Card>
+  
+  <Card title="Voice input" icon="microphone" href="/features/voice-input">
+    Deep dive into speech-to-text normalization algorithms
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Build fails with 'google-services.json not found'">
+    Make sure you've placed the `google-services.json` file in the `app/` directory (not the project root). The file should be at the same level as `app/build.gradle.kts`.
+  </Accordion>
+  
+  <Accordion title="Voice recognition not working on emulator">
+    Google's speech recognition engine requires Google Play Services and may not work properly on emulators. Use a physical device for testing voice features.
+  </Accordion>
+  
+  <Accordion title="Location permissions denied">
+    The app requires runtime permissions for location access. Make sure to grant both `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` when prompted.
+  </Accordion>
+  
+  <Accordion title="Gradle sync fails">
+    Try these steps:
+    1. Click **File > Invalidate Caches**
+    2. Delete the `.gradle` folder in your project
+    3. Click **File > Sync Project with Gradle Files**
+    4. Ensure you have a stable internet connection for dependency downloads
+  </Accordion>
+</AccordionGroup>

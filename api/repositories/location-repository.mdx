@@ -1,0 +1,161 @@
+---
+title: "LocationRepository"
+description: "Repository for accessing device location using Google Play Services"
+---
+
+## Overview
+
+The `LocationRepository` class provides access to the device's location using Google Play Services Fused Location Provider. It handles permission checks and retrieves both last known and current location.
+
+## Class Definition
+
+```kotlin
+class LocationRepository(private val context: Context)
+```
+
+<ParamField path="context" type="Context" required>
+  Android Context used for checking permissions and accessing location services
+</ParamField>
+
+## Methods
+
+### hasPermission
+
+Checks if the app has location permissions.
+
+```kotlin
+fun hasPermission(): Boolean
+```
+
+<ResponseField name="Boolean" type="Boolean">
+  Returns true if either ACCESS_FINE_LOCATION or ACCESS_COARSE_LOCATION permission is granted
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val locationRepository = LocationRepository(context)
+if (locationRepository.hasPermission()) {
+    // Proceed with location access
+} else {
+    // Request location permissions
+}
+```
+
+<Note>
+  The method checks for both `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` permissions. If either is granted, it returns true.
+</Note>
+
+### getLatLng
+
+Retrieves the device's current latitude and longitude coordinates.
+
+```kotlin
+suspend fun getLatLng(): Pair<Double, Double>
+```
+
+<ResponseField name="Pair<Double, Double>" type="Pair<Double, Double>">
+  A pair containing latitude and longitude coordinates
+</ResponseField>
+
+**Example:**
+
+```kotlin
+val locationRepository = LocationRepository(context)
+try {
+    val (latitude, longitude) = locationRepository.getLatLng()
+    println("Location: $latitude, $longitude")
+} catch (e: IllegalStateException) {
+    // Handle location error
+    println("Error: ${e.message}")
+}
+```
+
+## Location Retrieval Strategy
+
+The `getLatLng` method attempts to get location in the following order:
+
+1. **Last Known Location**: First tries to retrieve the last known location from cache
+2. **Current Location**: If no cached location exists, requests a fresh high-accuracy location
+3. **Error Handling**: Throws descriptive errors if location is unavailable
+
+```kotlin
+// Priority settings
+Priority.PRIORITY_HIGH_ACCURACY // Used for current location requests
+```
+
+## Error Handling
+
+The method throws `IllegalStateException` with descriptive messages in the following cases:
+
+<ResponseField name="SecurityException" type="IllegalStateException">
+  **Message**: "Permiso de ubicación no concedido." (Location permission not granted)
+  
+  Thrown when location permissions have not been granted
+</ResponseField>
+
+<ResponseField name="Location Unavailable" type="IllegalStateException">
+  **Message**: "Ubicación no disponible (GPS apagado o sin señal)." (Location unavailable - GPS off or no signal)
+  
+  Thrown when neither last location nor current location could be retrieved
+</ResponseField>
+
+<ResponseField name="Generic Error" type="IllegalStateException">
+  **Message**: "Error obteniendo ubicación: error message" (Error getting location)
+  
+  Thrown for any other errors during location retrieval
+</ResponseField>
+
+**Example with error handling:**
+
+```kotlin
+val locationRepository = LocationRepository(context)
+
+if (!locationRepository.hasPermission()) {
+    // Request permissions first
+    requestLocationPermissions()
+    return
+}
+
+try {
+    val (lat, lng) = locationRepository.getLatLng()
+    // Use coordinates
+    displayLocationOnMap(lat, lng)
+} catch (e: IllegalStateException) {
+    when {
+        e.message?.contains("Permiso") == true -> {
+            // Permission denied
+            showPermissionError()
+        }
+        e.message?.contains("GPS") == true -> {
+            // GPS disabled or no signal
+            showGpsError()
+        }
+        else -> {
+            // Other error
+            showGenericError(e.message)
+        }
+    }
+}
+```
+
+## Required Permissions
+
+Add at least one of these permissions to your `AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+```
+
+## Dependencies
+
+This repository requires Google Play Services Location:
+
+```gradle
+implementation 'com.google.android.gms:play-services-location:latest_version'
+```
+
+## Source Location
+
+`com.demodogo.ev_sum_2.data.repositories.LocationRepository`

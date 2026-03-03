@@ -1,0 +1,278 @@
+---
+title: "TextToSpeechController"
+description: "Controller for Android text-to-speech functionality with Spanish language support"
+---
+
+## Overview
+
+The `TextToSpeechController` class provides a simplified interface for converting text to speech using Android's `TextToSpeech` engine. It is configured for Spanish (Chile) locale and handles initialization automatically.
+
+**Location**: `com.demodogo.ev_sum_2.services.TextToSpeechController`
+
+## Constructor
+
+```kotlin
+class TextToSpeechController(context: Context)
+```
+
+<ParamField path="context" type="Context" required>
+  The Android application context required for initializing the TextToSpeech engine
+</ParamField>
+
+### Initialization
+
+The controller automatically initializes the TextToSpeech engine on creation:
+
+- **Language**: Set to Spanish (Chile) - `"es-CL"`
+- **Readiness**: Tracked internally to ensure the engine is ready before speaking
+- **Queue Mode**: Uses `QUEUE_FLUSH` to replace any ongoing speech
+
+```kotlin
+val ttsController = TextToSpeechController(context)
+// Engine initializes automatically in the background
+```
+
+## Methods
+
+### speak
+
+Converts the provided text to speech.
+
+```kotlin
+fun speak(text: String)
+```
+
+<ParamField path="text" type="String" required>
+  The text to speak. Will be trimmed before processing.
+</ParamField>
+
+<Note>
+  The method performs automatic validation:
+  - Returns silently if the TTS engine is not ready
+  - Returns silently if the text is blank after trimming
+  - Uses `QUEUE_FLUSH` mode, which stops any ongoing speech before starting new speech
+</Note>
+
+#### Usage Example
+
+```kotlin
+val ttsController = TextToSpeechController(context)
+
+// Speak a phrase
+ttsController.speak("Hola, ¿cómo estás?")
+
+// Blank text is ignored
+ttsController.speak("   ") // Does nothing
+
+// New speech interrupts ongoing speech
+ttsController.speak("Primera frase")
+ttsController.speak("Segunda frase") // Interrupts and replaces first phrase
+```
+
+---
+
+### stop
+
+Stops any ongoing speech immediately.
+
+```kotlin
+fun stop()
+```
+
+<Note>
+  This method interrupts and clears any speech currently being spoken.
+</Note>
+
+#### Usage Example
+
+```kotlin
+val ttsController = TextToSpeechController(context)
+
+ttsController.speak("Esta es una frase muy larga que tardará en completarse")
+
+// Stop speaking immediately
+ttsController.stop()
+```
+
+---
+
+### destroy
+
+Releases all resources used by the TextToSpeech engine.
+
+```kotlin
+fun destroy()
+```
+
+<Warning>
+  Always call `destroy()` when you're done with the controller to free up system resources. This should typically be done in your Activity's or Fragment's `onDestroy()` method.
+</Warning>
+
+This method:
+1. Stops any ongoing speech
+2. Shuts down the TTS engine
+3. Nullifies the engine reference
+
+#### Usage Example
+
+```kotlin
+override fun onDestroy() {
+    super.onDestroy()
+    ttsController.destroy()
+}
+```
+
+## Properties
+
+The controller maintains internal state:
+
+- **tts**: `TextToSpeech?` - The underlying TTS engine instance
+- **ready**: `Boolean` - Indicates whether the engine is initialized and ready
+
+<Note>
+  These properties are private and managed automatically. The `ready` flag ensures that `speak()` only works when the engine is properly initialized.
+</Note>
+
+## Speech Configuration
+
+The controller uses these settings:
+
+| Setting | Value | Description |
+|---------|-------|-------------|
+| Language | `es-CL` | Spanish (Chile) |
+| Queue Mode | `QUEUE_FLUSH` | Replaces ongoing speech |
+| Utterance ID | `"phrase_tts"` | Identifier for the speech utterance |
+
+## Complete Usage Example
+
+```kotlin
+class PhraseDetailActivity : AppCompatActivity() {
+    private lateinit var ttsController: TextToSpeechController
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_phrase_detail)
+        
+        // Initialize TTS controller
+        ttsController = TextToSpeechController(this)
+        
+        // Speak button
+        findViewById<Button>(R.id.speakButton).setOnClickListener {
+            val phraseText = findViewById<TextView>(R.id.phraseText).text.toString()
+            ttsController.speak(phraseText)
+        }
+        
+        // Stop button
+        findViewById<Button>(R.id.stopButton).setOnClickListener {
+            ttsController.stop()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Clean up TTS resources
+        ttsController.destroy()
+    }
+}
+```
+
+## ViewModel Integration
+
+```kotlin
+class PhraseViewModel(application: Application) : AndroidViewModel(application) {
+    private val ttsController = TextToSpeechController(application)
+
+    fun speakPhrase(text: String) {
+        ttsController.speak(text)
+    }
+
+    fun stopSpeaking() {
+        ttsController.stop()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        ttsController.destroy()
+    }
+}
+```
+
+## Lifecycle Management
+
+<Note>
+  Follow these best practices for managing the TTS controller lifecycle:
+</Note>
+
+1. **Create** the controller early (e.g., in `onCreate()`) to allow initialization time
+2. **Use** `speak()` and `stop()` as needed during the component's lifecycle
+3. **Destroy** in `onDestroy()` or `onCleared()` to release resources
+
+```kotlin
+// Activity lifecycle
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    ttsController = TextToSpeechController(this)
+}
+
+override fun onDestroy() {
+    super.onDestroy()
+    ttsController.destroy()
+}
+
+// ViewModel lifecycle
+class MyViewModel(app: Application) : AndroidViewModel(app) {
+    private val ttsController = TextToSpeechController(app)
+    
+    override fun onCleared() {
+        super.onCleared()
+        ttsController.destroy()
+    }
+}
+```
+
+## Error Handling
+
+<Note>
+  The controller handles initialization failures gracefully:
+</Note>
+
+- If TTS initialization fails, the `ready` flag remains `false`
+- All `speak()` calls will return silently when not ready
+- No exceptions are thrown to the caller
+
+```kotlin
+// Safe to call even if TTS initialization failed
+ttsController.speak("Some text") // Returns silently if not ready
+```
+
+## Language Support
+
+The controller is configured for Spanish (Chile):
+
+```kotlin
+tts?.language = Locale.forLanguageTag("es-CL")
+```
+
+If you need to support different languages, you can modify the controller or create language-specific variants.
+
+## Queue Behavior
+
+<Warning>
+  The controller uses `QUEUE_FLUSH` mode, which means:
+</Warning>
+
+- New speech **interrupts** and **replaces** any ongoing speech
+- Previous speech in the queue is **discarded**
+
+```kotlin
+ttsController.speak("Primera frase")
+ttsController.speak("Segunda frase") // Immediately stops "Primera frase"
+```
+
+If you need to queue multiple phrases sequentially, you would need to modify the controller to use `TextToSpeech.QUEUE_ADD` instead.
+
+## See Also
+
+- [SpeechController](/api/services/speech-controller) - Speech recognition controller
+- [Android TextToSpeech](https://developer.android.com/reference/android/speech/tts/TextToSpeech) - Official documentation
+- [PhraseService](/api/services/phrase-service) - Service for managing phrases to speak

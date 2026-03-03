@@ -1,0 +1,229 @@
+---
+title: "DeviceLocation"
+description: "Domain model representing geographic coordinates"
+---
+
+## Overview
+
+The `DeviceLocation` data class represents a geographic location with latitude and longitude coordinates. It's used throughout the EV Sum 2 application to represent device position.
+
+## Class Definition
+
+```kotlin
+data class DeviceLocation(
+    val latitude: Double,
+    val longitude: Double
+)
+```
+
+## Properties
+
+<ParamField path="latitude" type="Double" required>
+  The latitude coordinate in decimal degrees
+  
+  Valid range: -90.0 to 90.0
+  - Positive values represent North
+  - Negative values represent South
+</ParamField>
+
+<ParamField path="longitude" type="Double" required>
+  The longitude coordinate in decimal degrees
+  
+  Valid range: -180.0 to 180.0
+  - Positive values represent East
+  - Negative values represent West
+</ParamField>
+
+## Usage Examples
+
+### Creating a DeviceLocation instance
+
+```kotlin
+val location = DeviceLocation(
+    latitude = 40.7128,
+    longitude = -74.0060
+)
+```
+
+### Creating from Google Maps Location
+
+```kotlin
+import android.location.Location
+
+fun Location.toDeviceLocation() = DeviceLocation(
+    latitude = this.latitude,
+    longitude = this.longitude
+)
+
+// Usage
+val googleLocation: Location = // ... from location services
+val deviceLocation = googleLocation.toDeviceLocation()
+```
+
+### Creating from LocationRepository
+
+```kotlin
+val locationRepository = LocationRepository(context)
+val (lat, lng) = locationRepository.getLatLng()
+val deviceLocation = DeviceLocation(
+    latitude = lat,
+    longitude = lng
+)
+```
+
+## Data Class Features
+
+As a Kotlin data class, `DeviceLocation` automatically provides:
+
+- **equals()**: Compares two locations based on coordinates
+- **hashCode()**: Generates hash code based on coordinates
+- **toString()**: Returns a string representation of the location
+- **copy()**: Creates a copy with optionally modified coordinates
+- **componentN()**: Enables destructuring declarations
+
+### Destructuring
+
+```kotlin
+val location = DeviceLocation(40.7128, -74.0060)
+val (lat, lng) = location
+println("Latitude: $lat, Longitude: $lng")
+```
+
+## Validation
+
+```kotlin
+fun DeviceLocation.isValid(): Boolean {
+    return latitude in -90.0..90.0 && longitude in -180.0..180.0
+}
+
+fun DeviceLocation.isValidLatitude(): Boolean {
+    return latitude in -90.0..90.0
+}
+
+fun DeviceLocation.isValidLongitude(): Boolean {
+    return longitude in -180.0..180.0
+}
+
+// Usage
+val location = DeviceLocation(40.7128, -74.0060)
+if (location.isValid()) {
+    // Proceed with location operations
+} else {
+    // Handle invalid coordinates
+}
+```
+
+## Formatting
+
+### Decimal degrees format
+
+```kotlin
+fun DeviceLocation.toDecimalString(decimals: Int = 6): String {
+    return "%.${decimals}f, %.${decimals}f".format(latitude, longitude)
+}
+
+// Usage
+val location = DeviceLocation(40.7128, -74.0060)
+println(location.toDecimalString()) // "40.712800, -74.006000"
+```
+
+### Degrees, Minutes, Seconds format
+
+```kotlin
+fun Double.toDMS(isLatitude: Boolean): String {
+    val degrees = this.toInt()
+    val minutes = ((this - degrees) * 60).toInt()
+    val seconds = ((this - degrees - minutes / 60.0) * 3600)
+    val direction = when {
+        isLatitude && this >= 0 -> "N"
+        isLatitude -> "S"
+        !isLatitude && this >= 0 -> "E"
+        else -> "W"
+    }
+    return "${degrees.absoluteValue}°${minutes.absoluteValue}'${"%.2f".format(seconds.absoluteValue)}\"$direction"
+}
+
+fun DeviceLocation.toDMS(): String {
+    return "${latitude.toDMS(true)}, ${longitude.toDMS(false)}"
+}
+
+// Usage
+val location = DeviceLocation(40.7128, -74.0060)
+println(location.toDMS()) // "40°42'46.08\"N, 74°0'21.60\"W"
+```
+
+## Distance Calculation
+
+### Haversine formula for distance between two locations
+
+```kotlin
+import kotlin.math.*
+
+fun DeviceLocation.distanceTo(other: DeviceLocation): Double {
+    val earthRadius = 6371.0 // kilometers
+    
+    val lat1Rad = latitude.toRadians()
+    val lat2Rad = other.latitude.toRadians()
+    val deltaLat = (other.latitude - latitude).toRadians()
+    val deltaLng = (other.longitude - longitude).toRadians()
+    
+    val a = sin(deltaLat / 2).pow(2) +
+            cos(lat1Rad) * cos(lat2Rad) *
+            sin(deltaLng / 2).pow(2)
+    val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    
+    return earthRadius * c // Distance in kilometers
+}
+
+fun Double.toRadians() = this * PI / 180
+
+// Usage
+val location1 = DeviceLocation(40.7128, -74.0060) // New York
+val location2 = DeviceLocation(34.0522, -118.2437) // Los Angeles
+val distance = location1.distanceTo(location2)
+println("Distance: ${"%.2f".format(distance)} km")
+```
+
+## Google Maps Integration
+
+### Converting to LatLng
+
+```kotlin
+import com.google.android.gms.maps.model.LatLng
+
+fun DeviceLocation.toLatLng() = LatLng(latitude, longitude)
+
+// Usage
+val location = DeviceLocation(40.7128, -74.0060)
+val latLng = location.toLatLng()
+```
+
+### Creating marker
+
+```kotlin
+import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.model.MarkerOptions
+
+fun DeviceLocation.addMarker(map: GoogleMap, title: String = "Location") {
+    map.addMarker(
+        MarkerOptions()
+            .position(this.toLatLng())
+            .title(title)
+    )
+}
+```
+
+## Common Locations
+
+```kotlin
+object Locations {
+    val NEW_YORK = DeviceLocation(40.7128, -74.0060)
+    val LOS_ANGELES = DeviceLocation(34.0522, -118.2437)
+    val LONDON = DeviceLocation(51.5074, -0.1278)
+    val TOKYO = DeviceLocation(35.6762, 139.6503)
+}
+```
+
+## Source Location
+
+`com.demodogo.ev_sum_2.domain.models.DeviceLocation`

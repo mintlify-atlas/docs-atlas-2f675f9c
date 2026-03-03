@@ -1,0 +1,356 @@
+---
+title: Authentication
+description: Firebase Authentication with login, registration, and password recovery
+---
+
+EV Sum 2 uses Firebase Authentication to provide secure user authentication with email and password. The authentication system supports user registration, login, password recovery, and session management.
+
+## Architecture
+
+The authentication feature follows a layered architecture:
+
+- **AuthService** (`services/AuthService.kt:7`) - Service layer that handles business logic
+- **AuthRepository** (`data/repositories/AuthRepository.kt:11`) - Data layer that communicates with Firebase
+- **UI Screens** - Login, Register, and Recover screens for user interaction
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Email & Password" icon="envelope">
+    Standard email and password authentication
+  </Card>
+  <Card title="Password Recovery" icon="key">
+    Email-based password reset functionality
+  </Card>
+  <Card title="Session Management" icon="clock">
+    Real-time authentication state monitoring
+  </Card>
+  <Card title="Voice Input" icon="microphone">
+    Speech-to-text for email and password entry
+  </Card>
+</CardGroup>
+
+## Implementation
+
+### AuthService
+
+The `AuthService` class provides the main authentication methods:
+
+```kotlin
+class AuthService(
+    private val repo: AuthRepository = AuthRepository(),
+) {
+    suspend fun login(email: String, password: String) {
+        try {
+            repo.login(email, password)
+        } catch (e: Exception) {
+            throw mapFirebaseAuthError(e)
+        }
+    }
+
+    suspend fun register(email: String, password: String) {
+        try {
+            repo.register(email, password)
+        } catch (e: Exception) {
+            throw mapFirebaseAuthError(e)
+        }
+    }
+
+    suspend fun recover(email: String) {
+        try {
+            repo.sendPasswordReset(email)
+        } catch (e: Exception) {
+            throw mapFirebaseAuthError(e)
+        }
+    }
+
+    fun logout() = repo.logout()
+    fun isLoggedIn(): Boolean = repo.isLoggedIn()
+    fun authStateFlow(): Flow<FirebaseUser?> = repo.authStateFlow()
+    fun currentEmail(): String? = repo.currentEmail()
+}
+```
+
+### AuthRepository
+
+The repository layer interacts directly with Firebase Authentication:
+
+```kotlin
+class AuthRepository(
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
+) {
+    suspend fun login(email: String, password: String) {
+        auth.signInWithEmailAndPassword(email, password).await()
+        auth.currentUser != null
+    }
+
+    suspend fun register(email: String, password: String) {
+        auth.createUserWithEmailAndPassword(email, password).await()
+    }
+
+    suspend fun sendPasswordReset(email: String) {
+        auth.sendPasswordResetEmail(email).await()
+    }
+
+    fun logout() {
+        FirebaseModule.auth.signOut()
+    }
+
+    fun authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
+        val listener = FirebaseAuth.AuthStateListener {
+            fa -> trySend(fa.currentUser).isSuccess
+        }
+        auth.addAuthStateListener(listener)
+        trySend(auth.currentUser)
+        awaitClose { auth.removeAuthStateListener(listener) }
+    }
+}
+```
+
+## Usage examples
+
+<Tabs>
+  <Tab title="Login">
+    ```kotlin
+    val authService = AuthService()
+    val scope = rememberCoroutineScope()
+
+    Button(
+        onClick = {
+            scope.launch {
+                try {
+                    authService.login(email, password)
+                    // Navigate to home screen
+                } catch(e: Exception) {
+                    // Show error message
+                }
+            }
+        }
+    ) {
+        Text("Login")
+    }
+    ```
+  </Tab>
+  <Tab title="Register">
+    ```kotlin
+    val authService = AuthService()
+    val scope = rememberCoroutineScope()
+
+    Button(
+        onClick = {
+            scope.launch {
+                try {
+                    authService.register(email, password)
+                    // Navigate to home screen
+                } catch(e: Exception) {
+                    // Show error message
+                }
+            }
+        }
+    ) {
+        Text("Register")
+    }
+    ```
+  </Tab>
+  <Tab title="Password Recovery">
+    ```kotlin
+    val authService = AuthService()
+    val scope = rememberCoroutineScope()
+
+    Button(
+        onClick = {
+            scope.launch {
+                try {
+                    authService.recover(email)
+                    // Show success message
+                } catch(e: Exception) {
+                    // Show error message
+                }
+            }
+        }
+    ) {
+        Text("Send Reset Email")
+    }
+    ```
+  </Tab>
+  <Tab title="Auth State">
+    ```kotlin
+    val authService = AuthService()
+    
+    LaunchedEffect(Unit) {
+        authService.authStateFlow().collect { user ->
+            if (user == null) {
+                // User logged out, navigate to login
+            } else {
+                // User logged in, navigate to home
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Login screen implementation
+
+The login screen (`ui/auth/LoginScreen.kt:71`) demonstrates how to use the authentication service:
+
+<Steps>
+  <Step title="Initialize services">
+    Create instances of `AuthService` and set up state management:
+    ```kotlin
+    val authService = remember { AuthService() }
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    ```
+  </Step>
+  <Step title="Validate input">
+    Validate email format and ensure fields are not empty:
+    ```kotlin
+    when {
+        cleanEmail.isBlank() || password.isBlank() -> {
+            message = "Complete your email and password"
+            isError = true
+        }
+        !cleanEmail.isBasicEmailValid() -> {
+            message = "Invalid email (e.g., name@domain.com)"
+            isError = true
+        }
+        else -> {
+            // Proceed with login
+        }
+    }
+    ```
+  </Step>
+  <Step title="Execute login">
+    Call the authentication service in a coroutine:
+    ```kotlin
+    scope.launch {
+        try {
+            authService.login(cleanEmail, password)
+            message = null
+            isError = false
+            onLoginClick()
+        } catch(e: Exception) {
+            message = e.message ?: "Invalid credentials"
+            isError = true
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Voice input integration
+
+The login screen supports voice input for both email and password fields using speech recognition with Spanish normalization.
+
+<Info>
+Voice input uses the [Speech-to-Text](/features/speech-to-text) feature with specialized normalization for authentication fields.
+</Info>
+
+```kotlin
+val speechController = remember { SpeechController(context) }
+var dictationTarget by remember { mutableStateOf(DictationTarget.EMAIL) }
+
+speechController.setListener(
+    onPartial = { partial ->
+        when (dictationTarget) {
+            DictationTarget.EMAIL -> email = normalizeEmailFromSpeech(partial)
+            DictationTarget.PASSWORD -> password = normalizePasswordFromSpeech(partial)
+        }
+    },
+    onFinal = { final ->
+        when (dictationTarget) {
+            DictationTarget.EMAIL -> email = normalizeEmailFromSpeech(final)
+            DictationTarget.PASSWORD -> password = normalizePasswordFromSpeech(final)
+        }
+    }
+)
+```
+
+## Error handling
+
+The authentication service maps Firebase errors to user-friendly messages:
+
+```kotlin
+private fun mapFirebaseAuthError(e: Exception): Exception {
+    val msg = e.message ?: "Authentication error"
+    return Exception(msg)
+}
+```
+
+<Warning>
+Always handle authentication errors gracefully and provide clear feedback to users. Common errors include invalid credentials, network issues, and account already exists.
+</Warning>
+
+## Session management
+
+Check authentication state throughout your app:
+
+```kotlin
+val authService = AuthService()
+
+// Check if user is logged in
+if (authService.isLoggedIn()) {
+    // Show authenticated content
+} else {
+    // Show login screen
+}
+
+// Get current user email
+val email = authService.currentEmail()
+
+// Logout
+authService.logout()
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Email validation">
+    Always validate email format before attempting authentication:
+    ```kotlin
+    if (!email.isBasicEmailValid()) {
+        // Show validation error
+        return
+    }
+    ```
+  </Accordion>
+  <Accordion title="Password security">
+    - Minimum 6 characters (Firebase requirement)
+    - Use `PasswordVisualTransformation()` for password fields
+    - Never log or display passwords in plain text
+  </Accordion>
+  <Accordion title="Error messages">
+    Provide clear, actionable error messages:
+    - "Complete your email and password" for empty fields
+    - "Invalid email format" for malformed emails
+    - "Invalid credentials" for authentication failures
+  </Accordion>
+  <Accordion title="Loading states">
+    Show loading indicators during authentication operations:
+    ```kotlin
+    var isLoading by remember { mutableStateOf(false) }
+    
+    scope.launch {
+        isLoading = true
+        try {
+            authService.login(email, password)
+        } finally {
+            isLoading = false
+        }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related features
+
+<CardGroup cols={2}>
+  <Card title="Speech-to-Text" icon="microphone" href="/features/speech-to-text">
+    Voice input for authentication fields
+  </Card>
+  <Card title="Phrase Management" icon="list" href="/features/phrase-management">
+    User-specific data storage with Firestore
+  </Card>
+</CardGroup>

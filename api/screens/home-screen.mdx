@@ -1,0 +1,240 @@
+---
+title: "HomeScreen"
+description: "Main application screen for managing and playing user phrases with text-to-speech functionality"
+---
+
+## Overview
+
+The `HomeScreen` is the primary interface of the EV Sum 2 application. It provides users with the ability to create, manage, search, and play back saved phrases using text-to-speech technology. This screen is displayed after successful authentication and serves as the central hub for all phrase management operations.
+
+**File Location:** `com.demodogo.ev_sum_2.ui.home.HomeScreen.kt:64`
+
+## Function Signature
+
+```kotlin
+@Composable
+fun HomeScreen(
+    onLogout: () -> Unit,
+    onOpenLocation: () -> Unit
+)
+```
+
+## Parameters
+
+<ParamField path="onLogout" type="() -> Unit" required>
+  Callback function invoked when the user clicks the logout button. Typically navigates back to the login screen.
+</ParamField>
+
+<ParamField path="onOpenLocation" type="() -> Unit" required>
+  Callback function invoked when the user wants to view their device location. Opens the DeviceLocationScreen.
+</ParamField>
+
+## State Management
+
+The HomeScreen maintains several state variables to manage user interactions and data:
+
+### User Input State
+<ResponseField name="newPhrase" type="String">
+  Stores the text for creating a new phrase. Managed with `rememberSaveable`.
+</ResponseField>
+
+<ResponseField name="search" type="String">
+  Stores the search query for filtering saved phrases. Managed with `rememberSaveable`.
+</ResponseField>
+
+### Edit Dialog State
+<ResponseField name="editingPhraseId" type="String?">
+  Holds the ID of the phrase currently being edited, or null if no phrase is being edited.
+</ResponseField>
+
+<ResponseField name="editingText" type="String">
+  Stores the temporary text while editing a phrase.
+</ResponseField>
+
+<ResponseField name="showEditDialog" type="Boolean">
+  Controls the visibility of the phrase editing dialog.
+</ResponseField>
+
+### Data State
+<ResponseField name="phrases" type="List<Phrase>">
+  Contains the list of all user phrases loaded from the backend.
+</ResponseField>
+
+<ResponseField name="isLoading" type="Boolean">
+  Indicates whether an async operation is in progress.
+</ResponseField>
+
+<ResponseField name="error" type="String?">
+  Stores error messages to display to the user.
+</ResponseField>
+
+<ResponseField name="info" type="String?">
+  Stores informational messages to display to the user.
+</ResponseField>
+
+## Services & Controllers
+
+### AuthService
+Handles user authentication operations:
+- `currentEmail()` - Retrieves the currently logged-in user's email
+- `logout()` - Logs out the current user
+
+### PhraseService
+Manages phrase CRUD operations:
+- `get()` - Fetches all phrases for the current user
+- `add(text: String)` - Creates a new phrase
+- `update(id: String, text: String)` - Updates an existing phrase
+- `delete(id: String)` - Deletes a phrase
+
+### TextToSpeechController
+Provides text-to-speech functionality:
+- `speak(text: String)` - Speaks the provided text aloud
+- `destroy()` - Cleans up TTS resources
+
+## User Interactions
+
+### Creating a New Phrase
+
+1. User enters text in the "¿Qué quieres decir?" text field
+2. User clicks "GUARDAR NUEVA FRASE" button
+3. Validation ensures the text is not blank
+4. Phrase is saved via `PhraseService.add()`
+5. List is refreshed to show the new phrase
+
+```kotlin HomeScreen.kt:177-202
+Button(
+    onClick = {
+        val text = newPhrase.trim()
+        if (text.isBlank()) {
+            error = "Escribe algo antes de guardar."
+            return@Button
+        }
+        scope.launch {
+            isLoading = true
+            try {
+                phraseService.add(text)
+                newPhrase = ""
+                info = "Guardado con éxito."
+                loadPhrases()
+            } catch (e: Exception) {
+                error = e.message
+            } finally {
+                isLoading = false
+            }
+        }
+    },
+    // ...
+)
+```
+
+### Searching Phrases
+
+The search functionality filters phrases in real-time based on user input:
+
+```kotlin HomeScreen.kt:116-120
+val filtered = remember(phrases, search) {
+    val q = search.trim()
+    if (q.isBlank()) phrases
+    else phrases.filter { it.text.contains(q, ignoreCase = true ) }
+}
+```
+
+### Playing Phrase Audio
+
+Each phrase card includes a "REPRODUCIR VOZ" button that uses text-to-speech:
+
+```kotlin HomeScreen.kt:238-250
+Button(
+    onClick = { tts.speak(p.text) },
+    modifier = Modifier.fillMaxWidth().height(56.dp),
+    colors = ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary
+    ),
+    shape = RoundedCornerShape(12.dp)
+) {
+    Icon(Icons.AutoMirrored.Filled.VolumeUp, null, modifier = Modifier.size(24.dp))
+    Spacer(Modifier.width(12.dp))
+    Text("REPRODUCIR VOZ", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+}
+```
+
+### Copying to Clipboard
+
+Users can copy phrase text to the system clipboard:
+
+```kotlin HomeScreen.kt:94-98
+fun copyToClipboard(text: String) {
+    clipboard.setText(AnnotatedString(text))
+    info = "Copiado al portapapeles."
+    error = null
+}
+```
+
+### Editing Phrases
+
+1. User clicks "Editar" button on a phrase card
+2. Alert dialog opens with the phrase text
+3. User modifies the text
+4. User clicks "Guardar" to save changes
+5. Phrase is updated via `PhraseService.update()`
+
+### Deleting Phrases
+
+Users can delete phrases with a single click:
+
+```kotlin HomeScreen.kt:289-295
+Button(
+    onClick = {
+        scope.launch {
+            phraseService.delete(p.id)
+            loadPhrases()
+        }
+    },
+    // ...
+)
+```
+
+## UI Components
+
+The HomeScreen uses Material 3 components:
+
+- **Surface** - Root container with background color
+- **Column** - Main vertical layout with scrolling
+- **Card** - User info display and phrase containers
+- **OutlinedTextField** - Text input for new phrases and search
+- **Button** - Primary actions (save, play, delete, logout)
+- **OutlinedButton** - Secondary action (view location)
+- **LazyColumn** - Scrollable list of phrase cards
+- **LinearProgressIndicator** - Loading state indicator
+- **AlertDialog** - Edit phrase dialog
+
+## Example Usage
+
+```kotlin
+NavHost(navController = navController, startDestination = "login") {
+    composable("home") {
+        HomeScreen(
+            onLogout = {
+                navController.navigate("login") {
+                    popUpTo("home") { inclusive = true }
+                }
+            },
+            onOpenLocation = {
+                navController.navigate("location")
+            }
+        )
+    }
+}
+```
+
+<Note>
+The HomeScreen automatically loads phrases when first displayed using `LaunchedEffect(Unit)`. The TextToSpeechController is properly cleaned up when the composable is disposed.
+</Note>
+
+## Best Practices
+
+1. **Error Handling** - All async operations include try-catch blocks with user-friendly error messages
+2. **Resource Cleanup** - TTS controller is destroyed in `DisposableEffect` to prevent memory leaks
+3. **State Persistence** - User input is preserved across configuration changes using `rememberSaveable`
+4. **Optimized Filtering** - Search filtering uses `remember` to avoid unnecessary recomputations

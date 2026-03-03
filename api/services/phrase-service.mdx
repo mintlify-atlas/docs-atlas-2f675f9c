@@ -1,0 +1,260 @@
+---
+title: "PhraseService"
+description: "Service for managing user phrases with CRUD operations and validation"
+---
+
+## Overview
+
+The `PhraseService` class provides phrase management functionality including creating, reading, updating, and deleting phrases. It includes input validation and error handling.
+
+**Location**: `com.demodogo.ev_sum_2.services.PhraseService`
+
+## Constructor
+
+```kotlin
+class PhraseService(
+    private val repo: PhraseRepository = PhraseRepository()
+)
+```
+
+<ParamField path="repo" type="PhraseRepository" default="PhraseRepository()">
+  The phrase repository instance. Defaults to a new `PhraseRepository` instance.
+</ParamField>
+
+## Methods
+
+### add
+
+Adds a new phrase to the repository.
+
+```kotlin
+suspend fun add(text: String)
+```
+
+<ParamField path="text" type="String" required>
+  The phrase text to add. Will be trimmed before validation.
+</ParamField>
+
+**Throws**: 
+- `IllegalArgumentException` if the trimmed text is blank
+- `Exception` if saving the phrase fails
+
+<Note>
+  The input text is automatically trimmed before validation and storage.
+</Note>
+
+#### Usage Example
+
+```kotlin
+val phraseService = PhraseService()
+
+try {
+    phraseService.add("Hola, ¿cómo estás?")
+    // Phrase successfully added
+} catch (e: IllegalArgumentException) {
+    println("Invalid phrase: ${e.message}")
+} catch (e: Exception) {
+    println("Error saving phrase: ${e.message}")
+}
+```
+
+---
+
+### get
+
+Retrieves all phrases from the repository.
+
+```kotlin
+suspend fun get(): List<Phrase>
+```
+
+**Returns**: `List<Phrase>` - A list of all saved phrases
+
+**Throws**: `Exception` if loading phrases fails
+
+#### Usage Example
+
+```kotlin
+val phraseService = PhraseService()
+
+try {
+    val phrases = phraseService.get()
+    phrases.forEach { phrase ->
+        println("${phrase.id}: ${phrase.text}")
+    }
+} catch (e: Exception) {
+    println("Error loading phrases: ${e.message}")
+}
+```
+
+---
+
+### update
+
+Updates an existing phrase with new text.
+
+```kotlin
+suspend fun update(id: String, newText: String)
+```
+
+<ParamField path="id" type="String" required>
+  The unique identifier of the phrase to update
+</ParamField>
+
+<ParamField path="newText" type="String" required>
+  The new text for the phrase. Will be trimmed before validation.
+</ParamField>
+
+**Throws**: `IllegalArgumentException` if the trimmed text is blank
+
+<Warning>
+  The update method does not catch repository exceptions. Ensure proper error handling when calling this method.
+</Warning>
+
+#### Usage Example
+
+```kotlin
+val phraseService = PhraseService()
+
+try {
+    phraseService.update("phrase-id-123", "Updated phrase text")
+    // Phrase successfully updated
+} catch (e: IllegalArgumentException) {
+    println("Invalid phrase: ${e.message}")
+} catch (e: Exception) {
+    println("Error updating phrase: ${e.message}")
+}
+```
+
+---
+
+### delete
+
+Deletes a phrase from the repository.
+
+```kotlin
+suspend fun delete(id: String)
+```
+
+<ParamField path="id" type="String" required>
+  The unique identifier of the phrase to delete. Must not be blank.
+</ParamField>
+
+**Throws**: 
+- `IllegalArgumentException` if the id is blank
+- `Exception` if deletion fails
+
+#### Usage Example
+
+```kotlin
+val phraseService = PhraseService()
+
+try {
+    phraseService.delete("phrase-id-123")
+    // Phrase successfully deleted
+} catch (e: IllegalArgumentException) {
+    println("Invalid ID: ${e.message}")
+} catch (e: Exception) {
+    println("Error deleting phrase: ${e.message}")
+}
+```
+
+## Data Models
+
+### Phrase
+
+The `Phrase` model represents a saved phrase:
+
+```kotlin
+data class Phrase(
+    val id: String,
+    val text: String
+)
+```
+
+## Validation Rules
+
+<Note>
+  All text inputs are trimmed before validation. The following validation rules apply:
+</Note>
+
+- **add()**: Text cannot be blank after trimming
+- **update()**: New text cannot be blank after trimming
+- **delete()**: ID cannot be blank
+
+## Error Handling
+
+The service provides two types of error handling:
+
+1. **Validation Errors**: Throw `IllegalArgumentException` with descriptive messages in Spanish
+2. **Operation Errors**: Wrap repository exceptions with user-friendly messages
+
+#### Error Messages
+
+- `"La frase no puede estar vacía"` - Phrase cannot be empty (add/update)
+- `"Error al guardar la frase"` - Error saving phrase (add)
+- `"Error al cargar las frases"` - Error loading phrases (get)
+- `"Error al eliminar la frase"` - Error deleting phrase (delete)
+- `"Id inválido"` - Invalid ID (delete)
+
+## Complete Usage Example
+
+```kotlin
+class PhraseViewModel : ViewModel() {
+    private val phraseService = PhraseService()
+    private val _phrases = MutableStateFlow<List<Phrase>>(emptyList())
+    val phrases: StateFlow<List<Phrase>> = _phrases.asStateFlow()
+
+    init {
+        loadPhrases()
+    }
+
+    fun loadPhrases() {
+        viewModelScope.launch {
+            try {
+                _phrases.value = phraseService.get()
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+    }
+
+    fun addPhrase(text: String) {
+        viewModelScope.launch {
+            try {
+                phraseService.add(text)
+                loadPhrases() // Reload list
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+    }
+
+    fun updatePhrase(id: String, newText: String) {
+        viewModelScope.launch {
+            try {
+                phraseService.update(id, newText)
+                loadPhrases()
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+    }
+
+    fun deletePhrase(id: String) {
+        viewModelScope.launch {
+            try {
+                phraseService.delete(id)
+                loadPhrases()
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+    }
+}
+```
+
+## See Also
+
+- [PhraseRepository](/api/repositories/phrase-repository) - Underlying repository for phrase operations
+- [Phrase Model](/api/models/phrase) - Data model documentation

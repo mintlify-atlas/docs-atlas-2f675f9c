@@ -1,0 +1,519 @@
+---
+title: Phrase management
+description: CRUD operations for phrases with Cloud Firestore integration
+---
+
+EV Sum 2 enables users to create, read, update, and delete phrases stored in Cloud Firestore. Each user has their own collection of phrases that can be managed, searched, and spoken aloud.
+
+## Overview
+
+The phrase management system provides a complete CRUD interface with real-time data synchronization through Firebase Firestore. Phrases are stored in a user-specific subcollection and sorted by creation time.
+
+<Info>
+All phrases are stored in Firestore under `users/{userId}/phrases` to ensure data isolation between users.
+</Info>
+
+## Architecture
+
+The feature follows a clean architecture pattern:
+
+- **PhraseService** (`services/PhraseService.kt:6`) - Business logic and validation
+- **PhraseRepository** (`data/repositories/PhraseRepository.kt:9`) - Firestore data operations
+- **Phrase Model** (`domain/models/Phrase.kt:3`) - Data structure
+- **HomeScreen** (`ui/home/HomeScreen.kt:64`) - UI implementation
+
+## Data model
+
+The `Phrase` data class represents a stored phrase:
+
+```kotlin
+data class Phrase(
+    val id: String = "",
+    val text: String = "",
+    val createdAtMillis: Long = 0L
+)
+```
+
+### Firestore structure
+
+```
+users/
+  {userId}/
+    phrases/
+      {phraseId}/
+        text: String
+        createdAt: Long (milliseconds)
+```
+
+## PhraseService implementation
+
+The service layer handles validation and error mapping:
+
+```kotlin
+class PhraseService(
+    private val repo: PhraseRepository = PhraseRepository()
+) {
+    suspend fun add(text: String) {
+        try {
+            val clean = text.trim()
+            require(clean.isNotBlank()) { "Phrase cannot be empty" }
+            repo.add(clean)
+        } catch(e: Exception) {
+            throw Exception(e.message ?: "Error saving phrase")
+        }
+    }
+
+    suspend fun get(): List<Phrase> {
+        try {
+            return repo.get()
+        } catch(e: Exception) {
+            throw Exception(e.message ?: "Error loading phrases")
+        }
+    }
+
+    suspend fun update(id: String, newText: String) {
+        val clean = newText.trim()
+        if (clean.isBlank()) throw IllegalArgumentException("Phrase cannot be empty")
+        repo.update(id, clean)
+    }
+
+    suspend fun delete(id: String) {
+        try {
+            require(id.isNotBlank()) { "Invalid id" }
+            repo.delete(id)
+        } catch(e: Exception) {
+            throw Exception(e.message ?: "Error deleting phrase")
+        }
+    }
+}
+```
+
+## PhraseRepository implementation
+
+The repository layer communicates with Firestore:
+
+```kotlin
+class PhraseRepository(
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+) {
+    private fun uid(): String = 
+        auth.currentUser?.uid ?: throw IllegalStateException("No active session")
+
+    private fun col() = 
+        db.collection("users").document(uid()).collection("phrases")
+
+    suspend fun add(text: String) {
+        col().add(
+            mapOf(
+                "text" to text,
+                "createdAt" to System.currentTimeMillis()
+            )
+        ).await()
+    }
+
+    suspend fun get(): List<Phrase> {
+        val snap = col()
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .get()
+            .await()
+
+        return snap.documents.map { d ->
+            Phrase(
+                id = d.id,
+                text = d.getString("text") ?: "",
+                createdAtMillis = d.getLong("createdAt") ?: 0L
+            )
+        }
+    }
+
+    suspend fun update(id: String, newText: String) {
+        col().document(id).update(mapOf("text" to newText)).await()
+    }
+
+    suspend fun delete(id: String) {
+        col().document(id).delete().await()
+    }
+}
+```
+
+## CRUD operations
+
+<Tabs>
+  <Tab title="Create">
+    Add a new phrase to the user's collection:
+
+    ```kotlin
+    val phraseService = PhraseService()
+    val scope = rememberCoroutineScope()
+
+    scope.launch {
+        try {
+            phraseService.add("Hello, world!")
+            // Show success message
+        } catch (e: Exception) {
+            // Show error message
+        }
+    }
+    ```
+
+    <Note>
+    Empty or whitespace-only phrases are automatically rejected with a validation error.
+    </Note>
+  </Tab>
+  <Tab title="Read">
+    Retrieve all phrases for the current user:
+
+    ```kotlin
+    val phraseService = PhraseService()
+    var phrases by remember { mutableStateOf<List<Phrase>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        try {
+            phrases = phraseService.get()
+        } catch (e: Exception) {
+            // Handle error
+        }
+    }
+    ```
+
+    Phrases are returned sorted by creation time (newest first).
+  </Tab>
+  <Tab title="Update">
+    Modify an existing phrase:
+
+    ```kotlin
+    scope.launch {
+        try {
+            phraseService.update(phraseId, "Updated text")
+            // Reload phrases
+        } catch (e: Exception) {
+            // Show error
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Delete">
+    Remove a phrase from the collection:
+
+    ```kotlin
+    scope.launch {
+        try {
+            phraseService.delete(phraseId)
+            // Reload phrases
+        } catch (e: Exception) {
+            // Show error
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## UI implementation
+
+The home screen demonstrates complete phrase management functionality:
+
+<Steps>
+  <Step title="Initialize services">
+    Set up phrase service and state management:
+    ```kotlin
+    val phraseService = remember { PhraseService() }
+    var phrases by remember { mutableStateOf<List<Phrase>>(emptyList()) }
+    var newPhrase by rememberSaveable { mutableStateOf("") }
+    var isLoading by rememberSaveable { mutableStateOf(false) }
+    ```
+  </Step>
+  <Step title="Load phrases">
+    Fetch phrases when screen loads:
+    ```kotlin
+    fun loadPhrases() {
+        scope.launch {
+            isLoading = true
+            try {
+                phrases = phraseService.get()
+            } catch(e: Exception) {
+                error = e.message ?: "Error loading phrases"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) { loadPhrases() }
+    ```
+  </Step>
+  <Step title="Add new phrase">
+    Create form for adding phrases:
+    ```kotlin
+    OutlinedTextField(
+        value = newPhrase,
+        onValueChange = { newPhrase = it },
+        label = { Text("What do you want to say?") }
+    )
+
+    Button(
+        onClick = {
+            scope.launch {
+                phraseService.add(newPhrase)
+                newPhrase = ""
+                loadPhrases()
+            }
+        }
+    ) {
+        Text("SAVE NEW PHRASE")
+    }
+    ```
+  </Step>
+  <Step title="Display phrases">
+    Show phrases in a list with actions:
+    ```kotlin
+    LazyColumn {
+        items(phrases) { phrase ->
+            Card {
+                Text(phrase.text)
+                // Copy, Edit, Delete, Speak buttons
+            }
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Search functionality
+
+The app includes client-side phrase filtering:
+
+```kotlin
+var search by rememberSaveable { mutableStateOf("") }
+
+val filtered = remember(phrases, search) {
+    val q = search.trim()
+    if (q.isBlank()) phrases
+    else phrases.filter { it.text.contains(q, ignoreCase = true) }
+}
+
+OutlinedTextField(
+    value = search,
+    onValueChange = { search = it },
+    label = { Text("Search saved phrase") },
+    leadingIcon = { Icon(Icons.Default.Search, null) }
+)
+
+LazyColumn {
+    items(filtered) { phrase ->
+        // Display phrase
+    }
+}
+```
+
+<Info>
+Search is case-insensitive and filters phrases in real-time as you type.
+</Info>
+
+## Edit dialog
+
+The home screen implements an edit dialog for updating phrases:
+
+```kotlin
+var editingPhraseId by rememberSaveable { mutableStateOf<String?>(null) }
+var editingText by rememberSaveable { mutableStateOf("") }
+var showEditDialog by rememberSaveable { mutableStateOf(false) }
+
+// Open dialog
+Button(
+    onClick = {
+        editingPhraseId = phrase.id
+        editingText = phrase.text
+        showEditDialog = true
+    }
+) {
+    Text("Edit")
+}
+
+// Dialog
+if (showEditDialog) {
+    AlertDialog(
+        onDismissRequest = { showEditDialog = false },
+        title = { Text("Edit phrase") },
+        text = {
+            OutlinedTextField(
+                value = editingText,
+                onValueChange = { editingText = it },
+                label = { Text("Phrase") }
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    scope.launch {
+                        phraseService.update(editingPhraseId!!, editingText)
+                        showEditDialog = false
+                        loadPhrases()
+                    }
+                }
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = { showEditDialog = false }) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+```
+
+## Integration with TTS
+
+Phrases can be spoken aloud using the Text-to-Speech feature:
+
+```kotlin
+val tts = remember { TextToSpeechController(context) }
+
+DisposableEffect(Unit) {
+    onDispose { tts.destroy() }
+}
+
+Button(
+    onClick = { tts.speak(phrase.text) }
+) {
+    Icon(Icons.AutoMirrored.Filled.VolumeUp, null)
+    Text("PLAY VOICE")
+}
+```
+
+<Note>
+See [Text-to-Speech](/features/text-to-speech) for more details on speech synthesis.
+</Note>
+
+## Copy to clipboard
+
+Quickly copy phrases to the system clipboard:
+
+```kotlin
+val clipboard = LocalClipboardManager.current
+
+fun copyToClipboard(text: String) {
+    clipboard.setText(AnnotatedString(text))
+    info = "Copied to clipboard."
+}
+
+Button(
+    onClick = { copyToClipboard(phrase.text) }
+) {
+    Icon(Icons.Default.ContentCopy, null)
+    Text("Copy")
+}
+```
+
+## Error handling
+
+Implement comprehensive error handling for all operations:
+
+```kotlin
+var error by rememberSaveable { mutableStateOf<String?>(null) }
+var info by rememberSaveable { mutableStateOf<String?>(null) }
+
+scope.launch {
+    try {
+        phraseService.add(newPhrase)
+        info = "Saved successfully."
+        error = null
+    } catch (e: Exception) {
+        error = e.message
+        info = null
+    }
+}
+```
+
+### Common errors
+
+<AccordionGroup>
+  <Accordion title="Empty phrase">
+    **Error**: "Phrase cannot be empty"
+    
+    **Cause**: Attempting to save a blank or whitespace-only phrase
+    
+    **Solution**: Validate input before calling `add()` or `update()`
+  </Accordion>
+  <Accordion title="No active session">
+    **Error**: "No active session"
+    
+    **Cause**: User is not authenticated
+    
+    **Solution**: Ensure user is logged in before accessing phrase operations
+  </Accordion>
+  <Accordion title="Network error">
+    **Error**: "Error loading phrases" or "Error saving phrase"
+    
+    **Cause**: Network connectivity issues or Firestore unavailable
+    
+    **Solution**: Check internet connection and retry
+  </Accordion>
+  <Accordion title="Invalid ID">
+    **Error**: "Invalid id"
+    
+    **Cause**: Empty or null phrase ID passed to update/delete
+    
+    **Solution**: Verify phrase ID exists before performing operations
+  </Accordion>
+</AccordionGroup>
+
+## Loading states
+
+Provide visual feedback during asynchronous operations:
+
+```kotlin
+if (isLoading) {
+    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Validation" icon="check">
+    Always trim and validate phrase text before saving to prevent empty or invalid entries.
+  </Card>
+  <Card title="Error handling" icon="triangle-exclamation">
+    Catch exceptions and display user-friendly error messages for all CRUD operations.
+  </Card>
+  <Card title="Loading states" icon="spinner">
+    Show loading indicators during asynchronous operations to improve UX.
+  </Card>
+  <Card title="Refresh data" icon="rotate">
+    Reload the phrase list after create, update, or delete operations to keep UI in sync.
+  </Card>
+</CardGroup>
+
+<Warning>
+Phrase operations require an active user session. Always check authentication state before performing CRUD operations.
+</Warning>
+
+## Security considerations
+
+Firestore security rules ensure data isolation:
+
+```javascript
+match /users/{userId}/phrases/{phraseId} {
+  allow read, write: if request.auth != null && request.auth.uid == userId;
+}
+```
+
+This ensures:
+- Users can only access their own phrases
+- Authentication is required for all operations
+- No cross-user data access is possible
+
+## Related features
+
+<CardGroup cols={3}>
+  <Card title="Authentication" icon="lock" href="/features/authentication">
+    User authentication for phrase isolation
+  </Card>
+  <Card title="Text-to-Speech" icon="volume-high" href="/features/text-to-speech">
+    Speak phrases aloud
+  </Card>
+  <Card title="Speech-to-Text" icon="microphone" href="/features/speech-to-text">
+    Voice input for phrases
+  </Card>
+</CardGroup>

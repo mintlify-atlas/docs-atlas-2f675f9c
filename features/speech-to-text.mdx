@@ -1,0 +1,431 @@
+---
+title: Speech-to-text
+description: Speech recognition with Spanish normalization for voice input
+---
+
+EV Sum 2 integrates Android's Speech Recognition API to provide voice input capabilities with Spanish (Chile) locale and specialized normalization for email and password fields.
+
+## Overview
+
+The speech-to-text feature enables hands-free input throughout the app, with intelligent normalization that converts spoken Spanish words into appropriate text formats.
+
+<Info>
+The speech recognition is optimized for Chilean Spanish (`es-CL`) and includes custom normalization logic for email and password input.
+</Info>
+
+## Architecture
+
+The feature consists of two main components:
+
+- **SpeechController** (`services/SpeechController.kt:11`) - Manages speech recognition lifecycle
+- **Speech Normalization** (`domain/validators/SpeechNormalization.kt`) - Converts spoken words to text
+
+## SpeechController implementation
+
+The `SpeechController` class wraps Android's `SpeechRecognizer`:
+
+```kotlin
+class SpeechController(
+    context: Context,
+    private val locale: Locale = Locale.forLanguageTag("es-CL")
+) {
+    private val recognizer: SpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+
+    private val intent: Intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale)
+        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        putExtra(RecognizerIntent.EXTRA_PROMPT, "Habla ahora...")
+    }
+
+    fun start() {
+        recognizer.startListening(intent)
+    }
+
+    fun stop() {
+        recognizer.stopListening()
+    }
+
+    fun destroy() {
+        recognizer.destroy()
+    }
+}
+```
+
+## Setting up listeners
+
+The controller provides a flexible listener system for handling speech events:
+
+```kotlin
+speechController.setListener(
+    onReady = {
+        // Recognition is ready to receive speech
+        isListening = true
+    },
+    onPartial = { partialText ->
+        // Receive partial results in real-time
+        displayText = partialText
+    },
+    onFinal = { finalText ->
+        // Receive final recognition result
+        confirmedText = finalText
+    },
+    onError = { errorCode ->
+        // Handle recognition errors
+        handleError(errorCode)
+    },
+    onEnd = {
+        // Recognition has ended
+        isListening = false
+    }
+)
+```
+
+## Usage example
+
+<Steps>
+  <Step title="Create controller">
+    Initialize the speech controller with context:
+    ```kotlin
+    val context = LocalContext.current
+    val speechController = remember { SpeechController(context) }
+    ```
+  </Step>
+  <Step title="Set up listener">
+    Configure event handlers for speech recognition:
+    ```kotlin
+    LaunchedEffect(Unit) {
+        speechController.setListener(
+            onReady = { isListening = true },
+            onPartial = { partial -> text = partial },
+            onFinal = { final -> text = final },
+            onError = { code -> error = getFriendlyErrorMessage(code) },
+            onEnd = { isListening = false }
+        )
+    }
+    ```
+  </Step>
+  <Step title="Request permission">
+    Request microphone permission before starting:
+    ```kotlin
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            speechController.start()
+        }
+    }
+
+    // Request permission
+    micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    ```
+  </Step>
+  <Step title="Clean up">
+    Destroy the controller when done:
+    ```kotlin
+    DisposableEffect(Unit) {
+        onDispose { speechController.destroy() }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Spanish normalization
+
+The app includes specialized normalization functions that convert spoken Spanish words into appropriate text formats.
+
+### Email normalization
+
+The `normalizeEmailFromSpeech` function converts Spanish words to email-valid characters:
+
+```kotlin
+fun normalizeEmailFromSpeech(input: String): String {
+    var s = input.lowercase()
+
+    val wordMap = mapOf(
+        "arroba" to "@",
+        "punto" to ".",
+        "guion bajo" to "_",
+        "guionbajo" to "_",
+        "guion" to "-",
+        "i latina" to "i",
+        "ye" to "y",
+        "y griega" to "y"
+    )
+
+    wordMap.forEach { (word, replacement) ->
+        s = s.replace(word, replacement)
+    }
+
+    val numberMap = mapOf(
+        "cero" to "0",
+        "uno" to "1",
+        "dos" to "2",
+        // ... all digits
+    )
+
+    numberMap.forEach { (word, digit) ->
+        s = s.replace(word, digit)
+    }
+
+    // Detect spelling mode and handle accordingly
+    val tokens = s.split(" ").filter { it.isNotBlank() }
+    val singleCharRatio = tokens.count { it.length == 1 } / tokens.size.toDouble()
+    val isSpellingMode = singleCharRatio >= 0.6
+
+    val normalized = tokens.joinToString("") { token ->
+        when {
+            token == "y" && isSpellingMode -> "i"
+            else -> token
+        }
+    }
+
+    return normalized
+        .replace(" ", "")
+        .replace(Regex("[^a-z0-9@._-]"), "")
+        .trim()
+}
+```
+
+### Word mapping examples
+
+<Tabs>
+  <Tab title="Email Characters">
+    | Spanish Word | Character |
+    |-------------|----------|
+    | arroba | @ |
+    | punto | . |
+    | guion bajo | _ |
+    | guion | - |
+  </Tab>
+  <Tab title="Letters">
+    | Spanish Word | Letter |
+    |-------------|--------|
+    | i latina | i |
+    | ye | y |
+    | y griega | y |
+  </Tab>
+  <Tab title="Numbers">
+    | Spanish Word | Digit |
+    |-------------|-------|
+    | cero | 0 |
+    | uno | 1 |
+    | dos | 2 |
+    | tres | 3 |
+    | cuatro | 4 |
+    | cinco | 5 |
+  </Tab>
+</Tabs>
+
+### Example transformations
+
+<CodeGroup>
+```text Email Example 1
+Input:  "juan punto lopez arroba gmail punto com"
+Output: "juan.lopez@gmail.com"
+```
+
+```text Email Example 2
+Input:  "usuario guion bajo uno dos tres arroba correo punto cl"
+Output: "usuario_123@correo.cl"
+```
+
+```text Spelling Mode
+Input:  "a b c uno dos tres arroba test punto com"
+Output: "abc123@test.com"
+```
+</CodeGroup>
+
+## Password normalization
+
+The `normalizePasswordFromSpeech` function is similar but handles passwords:
+
+```kotlin
+fun normalizePasswordFromSpeech(input: String): String {
+    var s = input.lowercase()
+
+    // Apply word mappings (same as email)
+    wordMap.forEach { (word, replacement) ->
+        s = s.replace(word, replacement)
+    }
+
+    // Apply number mappings
+    numberMap.forEach { (word, digit) ->
+        s = s.replace(word, digit)
+    }
+
+    val tokens = s.split(" ").filter { it.isNotBlank() }
+
+    val normalized = tokens.joinToString("") { token ->
+        when (token) {
+            "y" -> "i"
+            else -> token
+        }
+    }
+
+    return normalized
+        .replace(Regex("[^a-z0-9@._-]"), "")
+        .trim()
+}
+```
+
+<Note>
+Password normalization doesn't use spelling mode detection since passwords are typically spoken as continuous words rather than individual characters.
+</Note>
+
+## Error handling
+
+Implement user-friendly error messages for common speech recognition errors:
+
+```kotlin
+fun getFriendlyErrorMessage(code: Int): String {
+    return when (code) {
+        7 -> "Could not connect to voice service. Check your internet."
+        9 -> "Microphone permission denied."
+        2 -> "Network error. Try again."
+        3 -> "We couldn't hear you well, try speaking louder."
+        5 -> "Microphone is being used by another app."
+        else -> "There was a problem with dictation. Try again."
+    }
+}
+```
+
+### Common error codes
+
+<AccordionGroup>
+  <Accordion title="ERROR_NETWORK_TIMEOUT (7)">
+    Network timeout - cannot connect to Google's speech recognition service.
+    
+    **Solution**: Check internet connection and try again.
+  </Accordion>
+  <Accordion title="ERROR_INSUFFICIENT_PERMISSIONS (9)">
+    Microphone permission not granted.
+    
+    **Solution**: Request `RECORD_AUDIO` permission.
+  </Accordion>
+  <Accordion title="ERROR_NETWORK (2)">
+    Network error during recognition.
+    
+    **Solution**: Verify internet connectivity.
+  </Accordion>
+  <Accordion title="ERROR_SPEECH_TIMEOUT (3)">
+    No speech input detected.
+    
+    **Solution**: Ask user to speak louder or closer to microphone.
+  </Accordion>
+  <Accordion title="ERROR_RECOGNIZER_BUSY (5)">
+    Speech recognizer is busy.
+    
+    **Solution**: Wait and try again, or check if another app is using the microphone.
+  </Accordion>
+</AccordionGroup>
+
+## Permissions
+
+Add the microphone permission to your `AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+```
+
+Request the permission at runtime:
+
+```kotlin
+val micPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestPermission()
+) { granted ->
+    if (granted) {
+        speechController.start()
+    } else {
+        showError("Microphone permission required")
+    }
+}
+
+micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+```
+
+## Integration example
+
+Here's how the login screen integrates speech recognition (`ui/auth/LoginScreen.kt:84`):
+
+```kotlin
+val speechController = remember { SpeechController(context) }
+var dictationTarget by remember { mutableStateOf(DictationTarget.EMAIL) }
+var isListening by remember { mutableStateOf(false) }
+
+// Set up listener
+LaunchedEffect(Unit) {
+    speechController.setListener(
+        onReady = {
+            isListening = true
+            speechError = null
+        },
+        onPartial = { partial ->
+            when (dictationTarget) {
+                DictationTarget.EMAIL -> email = normalizeEmailFromSpeech(partial)
+                DictationTarget.PASSWORD -> password = normalizePasswordFromSpeech(partial)
+            }
+        },
+        onFinal = { final ->
+            isListening = false
+            when (dictationTarget) {
+                DictationTarget.EMAIL -> email = normalizeEmailFromSpeech(final)
+                DictationTarget.PASSWORD -> password = normalizePasswordFromSpeech(final)
+            }
+        },
+        onError = { code ->
+            isListening = false
+            speechError = getFriendlyErrorMessage(code)
+        },
+        onEnd = {
+            isListening = false
+        }
+    )
+}
+
+// Voice input button
+Button(
+    onClick = {
+        if (isListening) {
+            speechController.stop()
+        } else {
+            showDictationDialog = true
+        }
+    }
+) {
+    Icon(if (isListening) Icons.Default.Mic else Icons.Default.MicNone)
+    Text(if (isListening) "Listening..." else "Voice")
+}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Cleanup" icon="broom">
+    Always call `destroy()` when the controller is no longer needed to release resources.
+  </Card>
+  <Card title="Partial results" icon="hourglass">
+    Enable partial results for real-time feedback to improve user experience.
+  </Card>
+  <Card title="Error handling" icon="triangle-exclamation">
+    Provide clear, actionable error messages for common issues.
+  </Card>
+  <Card title="Visual feedback" icon="eye">
+    Show clear indicators when listening is active.
+  </Card>
+</CardGroup>
+
+<Warning>
+Speech recognition requires an internet connection to work, as it uses Google's cloud-based recognition service.
+</Warning>
+
+## Related features
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/features/authentication">
+    Voice input for login credentials
+  </Card>
+  <Card title="Text-to-Speech" icon="volume-high" href="/features/text-to-speech">
+    Convert text back to speech
+  </Card>
+</CardGroup>

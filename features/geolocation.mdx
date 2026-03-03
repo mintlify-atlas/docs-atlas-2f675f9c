@@ -1,0 +1,469 @@
+---
+title: Geolocation
+description: Location services with reverse geocoding for address lookup
+---
+
+EV Sum 2 uses Google Play Services Location API to access device location with reverse geocoding capabilities that convert coordinates to human-readable addresses using the Chilean Spanish locale.
+
+## Overview
+
+The geolocation feature provides accurate device location using GPS or network providers, with automatic address lookup through Android's Geocoder API.
+
+<Info>
+The feature uses Google Play Services Fused Location Provider for optimal battery efficiency and accuracy.
+</Info>
+
+## Architecture
+
+The location feature consists of:
+
+- **LocationService** (`services/LocationService.kt:19`) - High-level service with reverse geocoding
+- **LocationRepository** (`data/repositories/LocationRepository.kt:11`) - Low-level location access
+- **DeviceLocation** (`domain/models/DeviceLocation.kt:3`) - Location data model
+
+## Data models
+
+### DeviceLocation
+
+```kotlin
+data class DeviceLocation(
+    val latitude: Double,
+    val longitude: Double
+)
+```
+
+### LocationResult
+
+```kotlin
+data class LocationResult(
+    val coords: DeviceLocation,
+    val address: String?
+)
+```
+
+## LocationService implementation
+
+The service combines location retrieval with reverse geocoding:
+
+```kotlin
+class LocationService(private val context: Context) {
+    private val repo = LocationRepository(context)
+
+    fun hasPermission(): Boolean = repo.hasPermission()
+
+    @RequiresPermission(anyOf = [
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    ])
+    suspend fun getLocationWithAddress(): LocationResult {
+        return try {
+            val (lat, lng) = repo.getLatLng()
+            val address = reverseGeocodeSafe(lat, lng)
+            LocationResult(DeviceLocation(lat, lng), address)
+        } catch (e: SecurityException) {
+            throw IllegalStateException("Location permission not granted.", e)
+        }
+    }
+
+    private suspend fun reverseGeocodeSafe(lat: Double, lon: Double): String? {
+        return try {
+            val geocoder = Geocoder(context, Locale.forLanguageTag("es-CL"))
+
+            if (Build.VERSION.SDK_INT >= 33) {
+                suspendCancellableCoroutine { cont ->
+                    geocoder.getFromLocation(lat, lon, 1) { results ->
+                        if (!cont.isActive) return@getFromLocation
+                        val line = results.firstOrNull()?.getAddressLine(0)
+                        cont.resume(line)
+                    }
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                geocoder.getFromLocation(lat, lon, 1)
+                    ?.firstOrNull()
+                    ?.getAddressLine(0)
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+}
+```
+
+## LocationRepository implementation
+
+The repository handles low-level location access:
+
+```kotlin
+class LocationRepository(private val context: Context) {
+    private val fused by lazy { 
+        LocationServices.getFusedLocationProviderClient(context) 
+    }
+
+    fun hasPermission(): Boolean {
+        val fine = ContextCompat.checkSelfPermission(
+            context, 
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val coarse = ContextCompat.checkSelfPermission(
+            context, 
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        return fine || coarse
+    }
+
+    suspend fun getLatLng(): Pair<Double, Double> {
+        try {
+            // Try last known location first
+            val last = fused.lastLocation.await()
+            if (last != null) return last.latitude to last.longitude
+
+            // Request current location if no last location
+            val current = fused.getCurrentLocation(
+                Priority.PRIORITY_HIGH_ACCURACY,
+                null
+            ).await()
+            if (current != null) return current.latitude to current.longitude
+
+            throw IllegalStateException(
+                "Location unavailable (GPS off or no signal)."
+            )
+        } catch (se: SecurityException) {
+            throw IllegalStateException("Location permission not granted.", se)
+        } catch (e: Exception) {
+            throw IllegalStateException("Error getting location: ${e.message}", e)
+        }
+    }
+}
+```
+
+## Usage example
+
+<Steps>
+  <Step title="Initialize service">
+    Create the location service with context:
+    ```kotlin
+    val context = LocalContext.current
+    val locationService = remember { LocationService(context) }
+    ```
+  </Step>
+  <Step title="Check permissions">
+    Verify location permissions before accessing location:
+    ```kotlin
+    if (!locationService.hasPermission()) {
+        // Request permissions
+        locationPermissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        )
+    }
+    ```
+  </Step>
+  <Step title="Get location">
+    Retrieve location with address:
+    ```kotlin
+    scope.launch {
+        try {
+            val result = locationService.getLocationWithAddress()
+            
+            // Access coordinates
+            val lat = result.coords.latitude
+            val lng = result.coords.longitude
+            
+            // Access address (may be null)
+            val address = result.address ?: "Address unavailable"
+        } catch (e: Exception) {
+            // Handle error
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Permissions
+
+Add location permissions to your `AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+```
+
+### Permission levels
+
+<Tabs>
+  <Tab title="Fine Location">
+    **ACCESS_FINE_LOCATION** provides GPS-level accuracy:
+    - Accuracy: ~5-10 meters
+    - Power consumption: Higher
+    - Best for: Navigation, precise location needs
+  </Tab>
+  <Tab title="Coarse Location">
+    **ACCESS_COARSE_LOCATION** provides network-based location:
+    - Accuracy: ~100-500 meters
+    - Power consumption: Lower
+    - Best for: General location, city-level accuracy
+  </Tab>
+</Tabs>
+
+### Runtime permission request
+
+```kotlin
+val locationPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestMultiplePermissions()
+) { permissions ->
+    when {
+        permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true -> {
+            // Fine location granted
+            getLocation()
+        }
+        permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true -> {
+            // Coarse location granted
+            getLocation()
+        }
+        else -> {
+            // No location permission
+            showError("Location permission required")
+        }
+    }
+}
+
+// Request permissions
+locationPermissionLauncher.launch(
+    arrayOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    )
+)
+```
+
+## Reverse geocoding
+
+The service automatically converts coordinates to addresses using the Geocoder API:
+
+```kotlin
+private suspend fun reverseGeocodeSafe(lat: Double, lon: Double): String? {
+    return try {
+        val geocoder = Geocoder(context, Locale.forLanguageTag("es-CL"))
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            // Use callback-based API for Android 13+
+            suspendCancellableCoroutine { cont ->
+                geocoder.getFromLocation(lat, lon, 1) { results ->
+                    if (!cont.isActive) return@getFromLocation
+                    val line = results.firstOrNull()?.getAddressLine(0)
+                    cont.resume(line)
+                }
+            }
+        } else {
+            // Use synchronous API for older versions
+            @Suppress("DEPRECATION")
+            geocoder.getFromLocation(lat, lon, 1)
+                ?.firstOrNull()
+                ?.getAddressLine(0)
+        }
+    } catch (_: Exception) {
+        null  // Return null if geocoding fails
+    }
+}
+```
+
+<Note>
+Reverse geocoding uses Chilean Spanish locale (`es-CL`) for localized address formatting.
+</Note>
+
+### Geocoding behavior
+
+- **Success**: Returns formatted address (e.g., "Av. Libertador Bernardo O'Higgins 1234, Santiago, Chile")
+- **Failure**: Returns `null` (graceful degradation)
+- **Offline**: May return `null` if Geocoder requires network
+
+## Location strategy
+
+The repository uses a two-tier approach for optimal performance:
+
+<Steps>
+  <Step title="Last known location">
+    First, try to get the last known location from cache:
+    ```kotlin
+    val last = fused.lastLocation.await()
+    if (last != null) return last.latitude to last.longitude
+    ```
+    
+    This is instant and battery-efficient.
+  </Step>
+  <Step title="Current location">
+    If no cached location exists, request a fresh location:
+    ```kotlin
+    val current = fused.getCurrentLocation(
+        Priority.PRIORITY_HIGH_ACCURACY,
+        null
+    ).await()
+    ```
+    
+    This may take a few seconds but provides accurate results.
+  </Step>
+</Steps>
+
+<Info>
+Using last known location first provides instant results in most cases, falling back to current location only when necessary.
+</Info>
+
+## Error handling
+
+The service handles various error scenarios:
+
+<AccordionGroup>
+  <Accordion title="Permission denied">
+    **Error**: `SecurityException` → "Location permission not granted."
+    
+    **Cause**: User hasn't granted location permissions
+    
+    **Solution**: Request `ACCESS_FINE_LOCATION` or `ACCESS_COARSE_LOCATION`
+  </Accordion>
+  <Accordion title="GPS disabled">
+    **Error**: `IllegalStateException` → "Location unavailable (GPS off or no signal)."
+    
+    **Cause**: GPS is disabled or device can't acquire location
+    
+    **Solution**: Prompt user to enable location services
+  </Accordion>
+  <Accordion title="Geocoding failure">
+    **Result**: `address` is `null`
+    
+    **Cause**: Network unavailable or geocoding service error
+    
+    **Solution**: Display coordinates only or show "Address unavailable"
+  </Accordion>
+</AccordionGroup>
+
+## Complete example
+
+Here's a complete implementation with error handling:
+
+```kotlin
+val locationService = remember { LocationService(context) }
+var location by remember { mutableStateOf<DeviceLocation?>(null) }
+var address by remember { mutableStateOf<String?>(null) }
+var error by remember { mutableStateOf<String?>(null) }
+var isLoading by remember { mutableStateOf(false) }
+
+val locationPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestMultiplePermissions()
+) { permissions ->
+    if (permissions.values.any { it }) {
+        // At least one permission granted
+        scope.launch {
+            isLoading = true
+            try {
+                val result = locationService.getLocationWithAddress()
+                location = result.coords
+                address = result.address
+                error = null
+            } catch (e: Exception) {
+                error = e.message ?: "Error getting location"
+            } finally {
+                isLoading = false
+            }
+        }
+    } else {
+        error = "Location permission required"
+    }
+}
+
+Button(
+    onClick = {
+        if (locationService.hasPermission()) {
+            scope.launch {
+                isLoading = true
+                try {
+                    val result = locationService.getLocationWithAddress()
+                    location = result.coords
+                    address = result.address
+                    error = null
+                } catch (e: Exception) {
+                    error = e.message
+                } finally {
+                    isLoading = false
+                }
+            }
+        } else {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+) {
+    Text(if (isLoading) "Loading..." else "Get Location")
+}
+
+// Display results
+location?.let {
+    Text("Latitude: ${it.latitude}")
+    Text("Longitude: ${it.longitude}")
+}
+
+address?.let {
+    Text("Address: $it")
+}
+
+error?.let {
+    Text(it, color = MaterialTheme.colorScheme.error)
+}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Check permissions" icon="shield-check">
+    Always verify permissions before requesting location to avoid SecurityException.
+  </Card>
+  <Card title="Handle null addresses" icon="map-location-dot">
+    Geocoding may fail - always handle null addresses gracefully.
+  </Card>
+  <Card title="Show loading state" icon="spinner">
+    Location requests can take time - provide visual feedback to users.
+  </Card>
+  <Card title="Battery efficiency" icon="battery-half">
+    Use last known location when possible to conserve battery.
+  </Card>
+</CardGroup>
+
+<Warning>
+Location services require Google Play Services to be installed and enabled on the device.
+</Warning>
+
+## Dependencies
+
+Add Google Play Services location to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
+}
+```
+
+## Testing considerations
+
+- **Emulator**: Use emulator extended controls to simulate GPS coordinates
+- **Physical device**: Test both indoors (may fail) and outdoors (GPS signal)
+- **Permissions**: Test both permission grant and denial scenarios
+- **Network**: Test geocoding with and without internet connection
+
+## Related features
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/features/authentication">
+    User authentication for personalized features
+  </Card>
+  <Card title="Phrase Management" icon="list" href="/features/phrase-management">
+    Store location-tagged phrases
+  </Card>
+</CardGroup>

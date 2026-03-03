@@ -1,0 +1,141 @@
+---
+title: "AppUser"
+description: "Domain model representing an application user"
+---
+
+## Overview
+
+The `AppUser` data class represents a user in the EV Sum 2 application. It contains basic user information typically retrieved from Firebase Authentication.
+
+## Class Definition
+
+```kotlin
+data class AppUser(
+    val uid: String = "",
+    val email: String = "",
+    val displayName: String = ""
+)
+```
+
+## Properties
+
+<ParamField path="uid" type="String" default='""'>
+  The unique identifier for the user, typically from Firebase Authentication
+</ParamField>
+
+<ParamField path="email" type="String" default='""'>
+  The user's email address
+</ParamField>
+
+<ParamField path="displayName" type="String" default='""'>
+  The user's display name or full name
+</ParamField>
+
+## Usage Examples
+
+### Creating an AppUser instance
+
+```kotlin
+val user = AppUser(
+    uid = "abc123xyz",
+    email = "user@example.com",
+    displayName = "John Doe"
+)
+```
+
+### Creating from Firebase User
+
+```kotlin
+val firebaseUser = FirebaseAuth.getInstance().currentUser
+val appUser = AppUser(
+    uid = firebaseUser?.uid ?: "",
+    email = firebaseUser?.email ?: "",
+    displayName = firebaseUser?.displayName ?: ""
+)
+```
+
+### Default instance
+
+```kotlin
+// Creates an empty user with all fields as empty strings
+val emptyUser = AppUser()
+```
+
+## Data Class Features
+
+As a Kotlin data class, `AppUser` automatically provides:
+
+- **equals()**: Compares two users based on their properties
+- **hashCode()**: Generates hash code based on properties
+- **toString()**: Returns a string representation of the user
+- **copy()**: Creates a copy with optionally modified properties
+- **componentN()**: Enables destructuring declarations
+
+### Copy with modifications
+
+```kotlin
+val user = AppUser(
+    uid = "abc123",
+    email = "user@example.com",
+    displayName = "John Doe"
+)
+
+// Update only the display name
+val updatedUser = user.copy(displayName = "Jane Doe")
+```
+
+### Destructuring
+
+```kotlin
+val user = AppUser(
+    uid = "abc123",
+    email = "user@example.com",
+    displayName = "John Doe"
+)
+
+val (uid, email, displayName) = user
+println("User ID: $uid")
+println("Email: $email")
+println("Name: $displayName")
+```
+
+## Integration with ViewModels
+
+```kotlin
+class AuthViewModel : ViewModel() {
+    private val _currentUser = MutableStateFlow<AppUser?>(null)
+    val currentUser: StateFlow<AppUser?> = _currentUser.asStateFlow()
+    
+    fun loadUser(firebaseUser: FirebaseUser?) {
+        _currentUser.value = firebaseUser?.let {
+            AppUser(
+                uid = it.uid,
+                email = it.email ?: "",
+                displayName = it.displayName ?: ""
+            )
+        }
+    }
+}
+```
+
+## Validation
+
+```kotlin
+fun AppUser.isValid(): Boolean {
+    return uid.isNotBlank() && email.isNotBlank()
+}
+
+fun AppUser.hasDisplayName(): Boolean {
+    return displayName.isNotBlank()
+}
+
+// Usage
+val user = AppUser(uid = "abc123", email = "user@example.com")
+if (user.isValid()) {
+    // Proceed with user operations
+}
+```
+
+## Source Location
+
+`com.demodogo.ev_sum_2.domain.models.AppUser`

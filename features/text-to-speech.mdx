@@ -1,0 +1,468 @@
+---
+title: Text-to-speech
+description: TTS synthesis with Spanish (Chile) locale for voice output
+---
+
+EV Sum 2 uses Android's TextToSpeech API to convert text into spoken audio with Spanish (Chile) locale, enabling users to hear their saved phrases aloud.
+
+## Overview
+
+The text-to-speech feature provides natural voice synthesis for Spanish text, with automatic initialization and lifecycle management.
+
+<Info>
+The TTS engine is configured for Chilean Spanish (`es-CL`) to provide natural pronunciation for local users.
+</Info>
+
+## Architecture
+
+The feature consists of a single controller class:
+
+- **TextToSpeechController** (`services/TextToSpeechController.kt:7`) - Manages TTS lifecycle and playback
+
+## Implementation
+
+The `TextToSpeechController` class wraps Android's TextToSpeech API:
+
+```kotlin
+class TextToSpeechController(context: Context) {
+    private var tts: TextToSpeech? = null
+    private var ready = false
+
+    init {
+        tts = TextToSpeech(context) { status ->
+            ready = status == TextToSpeech.SUCCESS
+            if (ready) {
+                tts?.language = Locale.forLanguageTag("es-CL")
+            }
+        }
+    }
+
+    fun speak(text: String) {
+        if (!ready) return
+        val clean = text.trim()
+        if (clean.isBlank()) return
+        tts?.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "phrase_tts")
+    }
+
+    fun stop() {
+        tts?.stop()
+    }
+
+    fun destroy() {
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
+    }
+}
+```
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Chilean Spanish" icon="flag">
+    Optimized for Spanish (Chile) locale
+  </Card>
+  <Card title="Auto-initialization" icon="gear">
+    Automatic TTS engine setup on creation
+  </Card>
+  <Card title="Queue management" icon="list">
+    QUEUE_FLUSH mode for immediate playback
+  </Card>
+  <Card title="Lifecycle aware" icon="recycle">
+    Proper cleanup to prevent memory leaks
+  </Card>
+</CardGroup>
+
+## Usage
+
+<Steps>
+  <Step title="Create controller">
+    Initialize the controller with context:
+    ```kotlin
+    val context = LocalContext.current
+    val tts = remember { TextToSpeechController(context) }
+    ```
+  </Step>
+  <Step title="Speak text">
+    Convert text to speech:
+    ```kotlin
+    Button(onClick = { tts.speak("Hola, mundo!") }) {
+        Text("Speak")
+    }
+    ```
+  </Step>
+  <Step title="Clean up">
+    Destroy the controller when done:
+    ```kotlin
+    DisposableEffect(Unit) {
+        onDispose { tts.destroy() }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Initialization process
+
+The TTS engine initializes asynchronously:
+
+```kotlin
+init {
+    tts = TextToSpeech(context) { status ->
+        ready = status == TextToSpeech.SUCCESS
+        if (ready) {
+            tts?.language = Locale.forLanguageTag("es-CL")
+        }
+    }
+}
+```
+
+<Note>
+The controller tracks initialization state with the `ready` flag. Speech requests before initialization complete are silently ignored.
+</Note>
+
+### Initialization states
+
+| State | Description | Behavior |
+|-------|-------------|----------|
+| Initializing | TTS engine loading | `speak()` calls ignored |
+| Ready | Locale set to `es-CL` | `speak()` calls processed |
+| Failed | Initialization error | `speak()` calls ignored |
+
+## Speaking text
+
+The `speak()` method handles text-to-speech conversion:
+
+```kotlin
+fun speak(text: String) {
+    if (!ready) return
+    val clean = text.trim()
+    if (clean.isBlank()) return
+    tts?.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "phrase_tts")
+}
+```
+
+### Parameters explained
+
+<AccordionGroup>
+  <Accordion title="text (String)">
+    The text to be spoken. Automatically trimmed and validated.
+  </Accordion>
+  <Accordion title="QUEUE_FLUSH">
+    Playback mode that clears any pending speech and starts immediately.
+    
+    Alternative: `QUEUE_ADD` appends to queue instead of replacing.
+  </Accordion>
+  <Accordion title="params (null)">
+    Optional parameters bundle (not used in this implementation).
+  </Accordion>
+  <Accordion title='utteranceId ("phrase_tts")'>
+    Unique identifier for tracking this speech request.
+  </Accordion>
+</AccordionGroup>
+
+## Queue modes
+
+<Tabs>
+  <Tab title="QUEUE_FLUSH">
+    Interrupts any ongoing speech and starts immediately:
+    ```kotlin
+    tts.speak("New text", TextToSpeech.QUEUE_FLUSH, null, "id")
+    ```
+    
+    **Use case**: User clicks a new phrase while another is playing.
+  </Tab>
+  <Tab title="QUEUE_ADD">
+    Adds to the end of the speech queue:
+    ```kotlin
+    tts.speak("New text", TextToSpeech.QUEUE_ADD, null, "id")
+    ```
+    
+    **Use case**: Reading multiple phrases in sequence.
+  </Tab>
+</Tabs>
+
+<Warning>
+EV Sum 2 uses `QUEUE_FLUSH` to ensure immediate feedback when users tap a phrase, preventing confusion from queued speech.
+</Warning>
+
+## Stopping speech
+
+Stop playback immediately:
+
+```kotlin
+fun stop() {
+    tts?.stop()
+}
+```
+
+Example usage:
+
+```kotlin
+var isSpeaking by remember { mutableStateOf(false) }
+
+Button(
+    onClick = {
+        if (isSpeaking) {
+            tts.stop()
+            isSpeaking = false
+        } else {
+            tts.speak(text)
+            isSpeaking = true
+        }
+    }
+) {
+    Text(if (isSpeaking) "Stop" else "Speak")
+}
+```
+
+## Lifecycle management
+
+Properly clean up resources when the controller is no longer needed:
+
+```kotlin
+fun destroy() {
+    tts?.stop()
+    tts?.shutdown()
+    tts = null
+}
+```
+
+### In Compose
+
+```kotlin
+val tts = remember { TextToSpeechController(context) }
+
+DisposableEffect(Unit) {
+    onDispose {
+        tts.destroy()
+    }
+}
+```
+
+<Warning>
+Always call `destroy()` to release TTS resources. Failure to do so may cause memory leaks and prevent other apps from using TTS.
+</Warning>
+
+## Integration with phrase management
+
+The home screen demonstrates TTS integration with saved phrases (`ui/home/HomeScreen.kt:88`):
+
+```kotlin
+val tts = remember { TextToSpeechController(context) }
+
+DisposableEffect(Unit) {
+    onDispose { tts.destroy() }
+}
+
+LazyColumn {
+    items(phrases) { phrase ->
+        Card {
+            Text(phrase.text)
+            
+            Button(
+                onClick = { tts.speak(phrase.text) },
+                modifier = Modifier.fillMaxWidth().height(56.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.VolumeUp, null)
+                Spacer(Modifier.width(12.dp))
+                Text("PLAY VOICE")
+            }
+        }
+    }
+}
+```
+
+## Validation
+
+The controller includes automatic validation:
+
+```kotlin
+fun speak(text: String) {
+    if (!ready) return           // Skip if not initialized
+    val clean = text.trim()
+    if (clean.isBlank()) return  // Skip if empty/whitespace
+    tts?.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "phrase_tts")
+}
+```
+
+### Validation checks
+
+1. **Initialization check**: `if (!ready) return`
+2. **Text cleaning**: `text.trim()`
+3. **Empty check**: `if (clean.isBlank()) return`
+
+<Info>
+Validation is automatic - you don't need to check these conditions before calling `speak()`.
+</Info>
+
+## Error handling
+
+The TTS engine may fail to initialize on some devices:
+
+```kotlin
+tts = TextToSpeech(context) { status ->
+    ready = status == TextToSpeech.SUCCESS
+    if (ready) {
+        tts?.language = Locale.forLanguageTag("es-CL")
+    } else {
+        // Initialization failed
+        Log.e("TTS", "TextToSpeech initialization failed")
+    }
+}
+```
+
+### Common initialization failures
+
+<AccordionGroup>
+  <Accordion title="Missing TTS engine">
+    **Cause**: Device doesn't have a TTS engine installed
+    
+    **Solution**: Prompt user to install Google Text-to-Speech from Play Store
+  </Accordion>
+  <Accordion title="Language not supported">
+    **Cause**: TTS engine doesn't support Spanish (Chile)
+    
+    **Solution**: Fall back to generic Spanish or prompt language download
+  </Accordion>
+  <Accordion title="Resource unavailable">
+    **Cause**: TTS engine is busy or being used by another app
+    
+    **Solution**: Retry initialization or show error message
+  </Accordion>
+</AccordionGroup>
+
+## Advanced usage
+
+### Speech rate and pitch
+
+Customize voice characteristics:
+
+```kotlin
+init {
+    tts = TextToSpeech(context) { status ->
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.language = Locale.forLanguageTag("es-CL")
+            tts?.setSpeechRate(1.0f)  // 0.5 = slower, 2.0 = faster
+            tts?.setPitch(1.0f)       // 0.5 = lower, 2.0 = higher
+        }
+    }
+}
+```
+
+### Utterance callbacks
+
+Track speech progress:
+
+```kotlin
+fun speak(text: String, onComplete: () -> Unit) {
+    if (!ready) return
+    val clean = text.trim()
+    if (clean.isBlank()) return
+    
+    val utteranceId = "phrase_${System.currentTimeMillis()}"
+    
+    tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+        override fun onStart(utteranceId: String?) {
+            // Speech started
+        }
+        
+        override fun onDone(utteranceId: String?) {
+            onComplete()
+        }
+        
+        override fun onError(utteranceId: String?) {
+            // Speech error
+        }
+    })
+    
+    tts?.speak(clean, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+}
+```
+
+## Testing
+
+### Test TTS availability
+
+```kotlin
+val intent = Intent()
+intent.action = TextToSpeech.Engine.ACTION_CHECK_TTS_DATA
+val result = context.startActivityForResult(intent, CHECK_TTS_DATA)
+
+if (result == TextToSpeech.Engine.CHECK_VOICE_DATA_PASS) {
+    // TTS is available
+} else {
+    // Prompt to install TTS data
+    val installIntent = Intent()
+    installIntent.action = TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA
+    context.startActivity(installIntent)
+}
+```
+
+### Emulator testing
+
+- Most emulators include Google TTS engine
+- Spanish voice may need to be downloaded
+- Test with various text lengths and special characters
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Always clean up" icon="broom">
+    Call `destroy()` in `onDispose` or component cleanup to release resources.
+  </Card>
+  <Card title="Handle initialization" icon="clock">
+    TTS initializes asynchronously - calls before ready are ignored.
+  </Card>
+  <Card title="Validate input" icon="check">
+    The controller validates text automatically, but check for meaningful content.
+  </Card>
+  <Card title="Consider queue mode" icon="list">
+    Use `QUEUE_FLUSH` for immediate feedback, `QUEUE_ADD` for sequences.
+  </Card>
+</CardGroup>
+
+<Note>
+The TTS engine runs in the background. If your app is backgrounded during speech, playback continues until completion.
+</Note>
+
+## Dependencies
+
+No additional dependencies required - TextToSpeech is part of Android framework.
+
+## Locale support
+
+The controller is configured for Chilean Spanish:
+
+```kotlin
+tts?.language = Locale.forLanguageTag("es-CL")
+```
+
+To support different locales:
+
+```kotlin
+class TextToSpeechController(
+    context: Context,
+    private val locale: Locale = Locale.forLanguageTag("es-CL")
+) {
+    init {
+        tts = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                val result = tts?.setLanguage(locale)
+                ready = result != TextToSpeech.LANG_MISSING_DATA &&
+                        result != TextToSpeech.LANG_NOT_SUPPORTED
+            }
+        }
+    }
+}
+```
+
+## Related features
+
+<CardGroup cols={2}>
+  <Card title="Phrase Management" icon="list" href="/features/phrase-management">
+    Store and manage phrases to speak
+  </Card>
+  <Card title="Speech-to-Text" icon="microphone" href="/features/speech-to-text">
+    Convert speech to text input
+  </Card>
+</CardGroup>

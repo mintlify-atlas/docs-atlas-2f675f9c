@@ -1,0 +1,283 @@
+---
+title: "Speech Normalization"
+description: "Functions for normalizing speech-to-text input for email and password fields"
+---
+
+## Overview
+
+The speech normalization module provides utility functions to convert Spanish speech-to-text output into properly formatted email addresses and passwords. These functions handle common speech patterns and convert spoken words into their symbolic equivalents.
+
+## Functions
+
+### normalizeEmailFromSpeech
+
+Normalizes spoken Spanish text into a valid email address format.
+
+```kotlin
+fun normalizeEmailFromSpeech(input: String): String
+```
+
+<ParamField path="input" type="String" required>
+  The raw speech-to-text output in Spanish
+</ParamField>
+
+<ResponseField name="String" type="String">
+  The normalized email address with symbols and proper formatting
+</ResponseField>
+
+## Normalization Process
+
+The function performs the following transformations:
+
+### 1. Special Character Mapping
+
+<ParamField path="arroba" type="String">
+  Converted to: `@`
+</ParamField>
+
+<ParamField path="punto" type="String">
+  Converted to: `.`
+</ParamField>
+
+<ParamField path="guion bajo / guionbajo" type="String">
+  Converted to: `_`
+</ParamField>
+
+<ParamField path="guion" type="String">
+  Converted to: `-`
+</ParamField>
+
+<ParamField path="i latina" type="String">
+  Converted to: `i`
+</ParamField>
+
+<ParamField path="ye / y griega" type="String">
+  Converted to: `y`
+</ParamField>
+
+### 2. Number Mapping
+
+Spoken Spanish numbers are converted to digits:
+
+- cero → 0
+- uno → 1
+- dos → 2
+- tres → 3
+- cuatro → 4
+- cinco → 5
+- seis → 6
+- siete → 7
+- ocho → 8
+- nueve → 9
+
+### 3. Spelling Mode Detection
+
+The function automatically detects if the user is spelling out the email character by character:
+
+- Calculates the ratio of single-character tokens
+- If ≥60% of tokens are single characters, activates spelling mode
+- In spelling mode, "y" is converted to "i" (common Spanish speech pattern)
+
+### 4. Final Cleanup
+
+- Removes all spaces
+- Filters out any characters not in: `a-z`, `0-9`, `@`, `.`, `_`, `-`
+- Trims whitespace
+
+**Example:**
+
+```kotlin
+// Spoken: "juan arroba ejemplo punto com"
+val email = normalizeEmailFromSpeech("juan arroba ejemplo punto com")
+println(email) // "juan@ejemplo.com"
+
+// Spoken with spelling: "jota u a ene arroba e jota e eme pe ele o punto ce o eme"
+val spelledEmail = normalizeEmailFromSpeech(
+    "jota u a ene arroba e jota e eme pe ele o punto ce o eme"
+)
+println(spelledEmail) // "juan@ejemplo.com"
+
+// With numbers: "usuario dos cero dos tres arroba correo punto com"
+val emailWithNumbers = normalizeEmailFromSpeech(
+    "usuario dos cero dos tres arroba correo punto com"
+)
+println(emailWithNumbers) // "usuario2023@correo.com"
+
+// With underscores: "mi guion bajo correo arroba ejemplo punto com"
+val emailWithUnderscore = normalizeEmailFromSpeech(
+    "mi guion bajo correo arroba ejemplo punto com"
+)
+println(emailWithUnderscore) // "mi_correo@ejemplo.com"
+```
+
+### normalizePasswordFromSpeech
+
+Normalizes spoken Spanish text into a password format.
+
+```kotlin
+fun normalizePasswordFromSpeech(input: String): String
+```
+
+<ParamField path="input" type="String" required>
+  The raw speech-to-text output in Spanish
+</ParamField>
+
+<ResponseField name="String" type="String">
+  The normalized password with symbols and proper formatting
+</ResponseField>
+
+## Normalization Process
+
+The function performs similar transformations to email normalization:
+
+### 1. Special Character Mapping
+
+Same as email normalization:
+- arroba → @
+- punto → .
+- guion bajo / guionbajo → _
+- guion → -
+- i latina → i
+- ye / y griega → y
+
+### 2. Number Mapping
+
+Same number conversions as email normalization (cero→0, uno→1, etc.)
+
+### 3. Character Processing
+
+<Note>
+  Unlike email normalization, password normalization does NOT use spelling mode detection. It always converts "y" to "i" regardless of token length patterns.
+</Note>
+
+### 4. Final Cleanup
+
+- Removes all spaces
+- Filters out any characters not in: `a-z`, `0-9`, `@`, `.`, `_`, `-`
+- Trims whitespace
+
+**Example:**
+
+```kotlin
+// Simple password
+val password1 = normalizePasswordFromSpeech("mi clave secreta")
+println(password1) // "miclavesecreta"
+
+// With numbers
+val password2 = normalizePasswordFromSpeech("clave uno dos tres")
+println(password2) // "clave123"
+
+// With special characters
+val password3 = normalizePasswordFromSpeech("mi guion bajo clave punto dos cero dos cuatro")
+println(password3) // "mi_clave.2024"
+
+// With "y" conversion
+val password4 = normalizePasswordFromSpeech("clave y prueba")
+println(password4) // "clavelprueba" (y → i)
+```
+
+## Usage in ViewModels
+
+```kotlin
+class LoginViewModel : ViewModel() {
+    private val _email = MutableStateFlow("")
+    val email: StateFlow<String> = _email.asStateFlow()
+    
+    private val _password = MutableStateFlow("")
+    val password: StateFlow<String> = _password.asStateFlow()
+    
+    fun onSpeechResultForEmail(spokenText: String) {
+        _email.value = normalizeEmailFromSpeech(spokenText)
+    }
+    
+    fun onSpeechResultForPassword(spokenText: String) {
+        _password.value = normalizePasswordFromSpeech(spokenText)
+    }
+}
+```
+
+## Usage with Speech Recognizer
+
+```kotlin
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+
+class SpeechHandler(context: Context) {
+    private val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+    
+    fun startEmailRecognition(onResult: (String) -> Unit) {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, 
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        }
+        
+        speechRecognizer.setRecognitionListener(object : RecognitionListener {
+            override fun onResults(results: Bundle?) {
+                val matches = results?.getStringArrayList(
+                    SpeechRecognizer.RESULTS_RECOGNITION
+                )
+                matches?.firstOrNull()?.let { spokenText ->
+                    val normalizedEmail = normalizeEmailFromSpeech(spokenText)
+                    onResult(normalizedEmail)
+                }
+            }
+            // ... other callbacks
+        })
+        
+        speechRecognizer.startListening(intent)
+    }
+}
+```
+
+## Supported Characters
+
+Both functions allow only these characters in the output:
+
+- Lowercase letters: `a-z`
+- Digits: `0-9`
+- Special characters: `@`, `.`, `_`, `-`
+
+<Note>
+  All input is converted to lowercase, and any uppercase letters or unsupported symbols are removed.
+</Note>
+
+## Key Differences
+
+| Feature | normalizeEmailFromSpeech | normalizePasswordFromSpeech |
+|---------|-------------------------|-----------------------------|
+| Spelling mode detection | Yes (≥60% single chars) | No |
+| "y" to "i" conversion | Only in spelling mode | Always |
+| Character filtering | Yes | Yes |
+| Number conversion | Yes | Yes |
+| Special char mapping | Yes | Yes |
+
+## Testing Examples
+
+```kotlin
+// Test email normalization
+assertEquals(
+    "test@example.com",
+    normalizeEmailFromSpeech("test arroba example punto com")
+)
+
+assertEquals(
+    "user_123@mail.com",
+    normalizeEmailFromSpeech("user guion bajo uno dos tres arroba mail punto com")
+)
+
+// Test password normalization
+assertEquals(
+    "password123",
+    normalizePasswordFromSpeech("password uno dos tres")
+)
+
+assertEquals(
+    "mi_clave.2024",
+    normalizePasswordFromSpeech("mi guion bajo clave punto dos cero dos cuatro")
+)
+```
+
+## Source Location
+
+`com.demodogo.ev_sum_2.domain.validators.SpeechNormalization`

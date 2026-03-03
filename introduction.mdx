@@ -1,0 +1,103 @@
+---
+title: Introduction
+description: Welcome to EV Sum 2, a modern Android app built with Kotlin and Jetpack Compose
+---
+
+## Overview
+
+EV Sum 2 is a feature-rich Android mobile application built with Kotlin and Jetpack Compose. The app demonstrates advanced cloud integration with Firebase services and leverages device sensors for voice input and geolocation functionality. It follows the Service-Repository pattern for clear separation of concerns and easy maintenance.
+
+<Note>
+  This app is designed to run on physical Android devices (API 24+) for optimal performance with voice recognition and sensor features.
+</Note>
+
+## Key features
+
+The app provides a comprehensive set of capabilities organized into distinct functional areas:
+
+<CardGroup cols={2}>
+  <Card title="Voice-powered authentication" icon="microphone">
+    Dictate your email and password using advanced speech-to-text with intelligent normalization that converts spoken words like "arroba" to "@" and "punto" to "."
+  </Card>
+  
+  <Card title="Firebase authentication" icon="lock">
+    Complete user management with sign-in, registration, password recovery, and persistent session handling via AuthStateListener
+  </Card>
+  
+  <Card title="Cloud phrase storage" icon="cloud">
+    Full CRUD operations for quick phrases stored in Cloud Firestore with automatic timestamp-based ordering
+  </Card>
+  
+  <Card title="Advanced geolocation" icon="location-dot">
+    Precise location tracking using FusedLocationProviderClient with reverse geocoding to convert coordinates into readable addresses
+  </Card>
+  
+  <Card title="Text-to-speech" icon="volume-high">
+    Built-in accessibility feature that reads stored phrases aloud using Android's TTS engine configured for Spanish (Chile)
+  </Card>
+  
+  <Card title="Material Design 3" icon="palette">
+    Modern UI built with Jetpack Compose and Material Design 3 components with dark/light theme support
+  </Card>
+</CardGroup>
+
+## Architecture highlights
+
+The project follows a clean, layered architecture that ensures low coupling and high maintainability:
+
+- **data**: Contains repositories (`AuthRepository`, `PhraseRepository`, `LocationRepository`) that interact asynchronously with Firebase and Google Cloud services
+- **domain**: Pure business models (`AppUser`, `Phrase`, `DeviceLocation`) and framework-agnostic validation logic
+- **services**: Hardware abstraction layer with controllers for `LocationService`, `SpeechController`, and `TextToSpeechController`
+- **ui**: Complete visual layer built with Jetpack Compose, organized by feature areas (`auth`, `home`, `location`) with navigation in `AppNavGraph.kt`
+
+## Technology stack
+
+<CardGroup cols={2}>
+  <Card title="Core framework">
+    - Kotlin 1.9+
+    - Jetpack Compose
+    - Material Design 3
+    - Android SDK 24-36
+  </Card>
+  
+  <Card title="Backend services">
+    - Firebase Authentication
+    - Cloud Firestore
+    - Google Play Services Location
+  </Card>
+  
+  <Card title="Architecture">
+    - Jetpack Navigation Compose
+    - Kotlinx Coroutines & Flow
+    - Service-Repository pattern
+  </Card>
+  
+  <Card title="Testing">
+    - JUnit for unit tests
+    - 100% coverage on speech normalization
+  </Card>
+</CardGroup>
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get the app running in minutes with our quick setup guide
+  </Card>
+  
+  <Card title="Detailed setup" icon="gear" href="/setup">
+    Complete setup instructions including Firebase configuration and permissions
+  </Card>
+  
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    Learn about the app's structure and design patterns
+  </Card>
+  
+  <Card title="Features" icon="star" href="/features">
+    Explore authentication, voice input, location services, and more
+  </Card>
+</CardGroup>
+
+## Download
+
+You can download the latest APK release from the [GitHub releases page](https://github.com/demodogo/ev_sum_2_android/releases/tag/v1.0.0).

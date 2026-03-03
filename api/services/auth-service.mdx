@@ -1,0 +1,233 @@
+---
+title: "AuthService"
+description: "Firebase authentication service for user login, registration, and password recovery"
+---
+
+## Overview
+
+The `AuthService` class provides authentication functionality using Firebase Authentication. It handles user login, registration, password recovery, and authentication state management.
+
+**Location**: `com.demodogo.ev_sum_2.services.AuthService`
+
+## Constructor
+
+```kotlin
+class AuthService(
+    private val repo: AuthRepository = AuthRepository()
+)
+```
+
+<ParamField path="repo" type="AuthRepository" default="AuthRepository()">
+  The authentication repository instance. Defaults to a new `AuthRepository` instance.
+</ParamField>
+
+## Methods
+
+### login
+
+Authenticates a user with email and password.
+
+```kotlin
+suspend fun login(email: String, password: String)
+```
+
+<ParamField path="email" type="String" required>
+  The user's email address
+</ParamField>
+
+<ParamField path="password" type="String" required>
+  The user's password
+</ParamField>
+
+**Throws**: `Exception` if authentication fails with mapped Firebase error message
+
+#### Usage Example
+
+```kotlin
+val authService = AuthService()
+
+try {
+    authService.login("user@example.com", "password123")
+    // User successfully logged in
+} catch (e: Exception) {
+    // Handle authentication error
+    println("Login failed: ${e.message}")
+}
+```
+
+---
+
+### register
+
+Registers a new user with email and password.
+
+```kotlin
+suspend fun register(email: String, password: String)
+```
+
+<ParamField path="email" type="String" required>
+  The new user's email address
+</ParamField>
+
+<ParamField path="password" type="String" required>
+  The new user's password
+</ParamField>
+
+**Throws**: `Exception` if registration fails with mapped Firebase error message
+
+#### Usage Example
+
+```kotlin
+val authService = AuthService()
+
+try {
+    authService.register("newuser@example.com", "securePassword123")
+    // User successfully registered
+} catch (e: Exception) {
+    // Handle registration error
+    println("Registration failed: ${e.message}")
+}
+```
+
+---
+
+### recover
+
+Sends a password reset email to the specified email address.
+
+```kotlin
+suspend fun recover(email: String)
+```
+
+<ParamField path="email" type="String" required>
+  The email address to send the password reset link to
+</ParamField>
+
+**Throws**: `Exception` if the password reset request fails
+
+#### Usage Example
+
+```kotlin
+val authService = AuthService()
+
+try {
+    authService.recover("user@example.com")
+    // Password reset email sent
+} catch (e: Exception) {
+    println("Password reset failed: ${e.message}")
+}
+```
+
+---
+
+### logout
+
+Logs out the current user.
+
+```kotlin
+fun logout()
+```
+
+#### Usage Example
+
+```kotlin
+val authService = AuthService()
+authService.logout()
+```
+
+---
+
+### isLoggedIn
+
+Checks if a user is currently logged in.
+
+```kotlin
+fun isLoggedIn(): Boolean
+```
+
+**Returns**: `Boolean` - `true` if a user is logged in, `false` otherwise
+
+#### Usage Example
+
+```kotlin
+val authService = AuthService()
+if (authService.isLoggedIn()) {
+    // User is logged in
+} else {
+    // User is not logged in
+}
+```
+
+---
+
+### authStateFlow
+
+Provides a Flow that emits authentication state changes.
+
+```kotlin
+fun authStateFlow(): Flow<FirebaseUser?>
+```
+
+**Returns**: `Flow<FirebaseUser?>` - A Flow that emits the current `FirebaseUser` or `null` when the user is not authenticated
+
+#### Usage Example
+
+```kotlin
+val authService = AuthService()
+
+lifecycleScope.launch {
+    authService.authStateFlow().collect { user ->
+        if (user != null) {
+            println("User logged in: ${user.email}")
+        } else {
+            println("User logged out")
+        }
+    }
+}
+```
+
+---
+
+### currentEmail
+
+Retrieves the email address of the currently logged-in user.
+
+```kotlin
+fun currentEmail(): String?
+```
+
+**Returns**: `String?` - The current user's email address, or `null` if not logged in
+
+#### Usage Example
+
+```kotlin
+val authService = AuthService()
+val email = authService.currentEmail()
+if (email != null) {
+    println("Current user: $email")
+} else {
+    println("No user logged in")
+}
+```
+
+## Error Handling
+
+<Warning>
+  All Firebase authentication errors are mapped through the `mapFirebaseAuthError` private method, which extracts the error message or provides a default "Error de autenticación" message.
+</Warning>
+
+Always wrap authentication operations in try-catch blocks to handle potential exceptions:
+
+```kotlin
+try {
+    authService.login(email, password)
+} catch (e: Exception) {
+    // Display error to user
+    showError(e.message ?: "Authentication failed")
+}
+```
+
+## See Also
+
+- [AuthRepository](/api/repositories/auth-repository) - Underlying repository for authentication operations
+- [Firebase Authentication](https://firebase.google.com/docs/auth/android/start) - Official Firebase Auth documentation

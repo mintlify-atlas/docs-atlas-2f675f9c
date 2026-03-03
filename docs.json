@@ -1,122 +1,102 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "EV Sum 2 Android",
+  "theme": "palm",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#6200EE",
+    "light": "#03DAC6",
+    "dark": "#FFD600"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/demodogo/ev_sum_2_android"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/demodogo/ev_sum_2_android"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "setup"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Features",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "features/authentication",
+              "features/speech-to-text",
+              "features/phrase-management",
+              "features/geolocation",
+              "features/text-to-speech"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Architecture",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "architecture/overview",
+              "architecture/service-repository-pattern",
+              "architecture/project-structure"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "UI Components",
             "pages": [
-              "api-reference/introduction"
+              "api/screens/home-screen",
+              "api/screens/login-screen",
+              "api/screens/register-screen",
+              "api/screens/location-screen"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Services",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/services/auth-service",
+              "api/services/phrase-service",
+              "api/services/location-service",
+              "api/services/speech-controller",
+              "api/services/tts-controller"
+            ]
+          },
+          {
+            "group": "Repositories",
+            "pages": [
+              "api/repositories/auth-repository",
+              "api/repositories/phrase-repository",
+              "api/repositories/location-repository"
+            ]
+          },
+          {
+            "group": "Domain Models",
+            "pages": [
+              "api/models/app-user",
+              "api/models/phrase",
+              "api/models/device-location"
+            ]
+          },
+          {
+            "group": "Validators",
+            "pages": [
+              "api/validators/speech-normalization"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }
