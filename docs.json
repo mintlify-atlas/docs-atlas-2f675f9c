@@ -60,6 +60,7 @@
               "api/screens/home-screen",
               "api/screens/login-screen",
               "api/screens/register-screen",
+              "api/screens/recover-screen",
               "api/screens/location-screen"
             ]
           },
@@ -92,7 +93,14 @@
           {
             "group": "Validators",
             "pages": [
-              "api/validators/speech-normalization"
+              "api/validators/speech-normalization",
+              "api/validators/input-validation"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/utilities/theme-store"
             ]
           }
         ]

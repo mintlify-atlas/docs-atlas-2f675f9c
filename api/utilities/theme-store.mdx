@@ -1,0 +1,305 @@
+---
+title: "ThemeStore"
+description: "Theme persistence and dark mode management"
+---
+
+## Overview
+
+`ThemeStore` is a singleton object that manages the application's theme state and persists user theme preferences using SharedPreferences. It provides a reactive Flow-based API for observing theme changes throughout the app.
+
+**File Location**: `com.demodogo.ev_sum_2.data.ThemeStore`
+
+## Class Definition
+
+```kotlin
+object ThemeStore {
+    private const val PREFS_NAME = "theme_prefs"
+    private const val KEY_IS_DARK_THEME = "is_dark_theme"
+
+    private val _isDarkTheme = MutableStateFlow(true)
+    val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
+
+    fun loadTheme(context: Context)
+    fun setDarkTheme(context: Context, isDark: Boolean)
+}
+```
+
+## Properties
+
+<ParamField path="isDarkTheme" type="StateFlow<Boolean>">
+  Read-only state flow that emits the current theme mode. Observers can collect this flow to react to theme changes in real-time.
+</ParamField>
+
+**Default Value**: `true` (dark theme enabled by default)
+
+## Methods
+
+### loadTheme()
+
+Loads the saved theme preference from SharedPreferences when the app starts.
+
+```kotlin
+fun loadTheme(context: Context)
+```
+
+<ParamField path="context" type="Context" required>
+  Android application context used to access SharedPreferences
+</ParamField>
+
+**Behavior**:
+- Reads the saved theme preference from persistent storage
+- Updates the `isDarkTheme` flow with the saved value
+- Falls back to `true` (dark theme) if no preference exists
+
+**Usage**:
+
+```kotlin
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Load theme on app startup
+        ThemeStore.loadTheme(this)
+        
+        setContent {
+            val isDarkTheme by ThemeStore.isDarkTheme.collectAsState()
+            
+            Ev_sum_2Theme(darkTheme = isDarkTheme) {
+                // App content
+            }
+        }
+    }
+}
+```
+
+### setDarkTheme()
+
+Updates the theme mode and persists the preference.
+
+```kotlin
+fun setDarkTheme(context: Context, isDark: Boolean)
+```
+
+<ParamField path="context" type="Context" required>
+  Android application context used to access SharedPreferences
+</ParamField>
+
+<ParamField path="isDark" type="Boolean" required>
+  `true` to enable dark theme, `false` to enable light theme
+</ParamField>
+
+**Behavior**:
+- Saves the theme preference to SharedPreferences
+- Updates the `isDarkTheme` flow, triggering UI recomposition
+- Changes persist across app restarts
+
+**Usage**:
+
+```kotlin
+IconButton(
+    onClick = { 
+        ThemeStore.setDarkTheme(context, !isDarkTheme) 
+    }
+) {
+    Icon(
+        imageVector = if (isDarkTheme) 
+            Icons.Default.LightMode 
+        else 
+            Icons.Default.DarkMode,
+        contentDescription = "Toggle Theme"
+    )
+}
+```
+
+## Integration with MainActivity
+
+The app integrates ThemeStore in `MainActivity` to provide theme switching:
+
+```kotlin
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        ThemeStore.loadTheme(this)
+
+        setContent {
+            val isDarkTheme by ThemeStore.isDarkTheme.collectAsState()
+
+            Ev_sum_2Theme(darkTheme = isDarkTheme) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AppNavGraph()
+
+                    // Theme toggle button in top-right corner
+                    IconButton(
+                        onClick = { 
+                            ThemeStore.setDarkTheme(this@MainActivity, !isDarkTheme) 
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(16.dp)
+                            .statusBarsPadding()
+                    ) {
+                        Icon(
+                            imageVector = if (isDarkTheme) 
+                                Icons.Default.LightMode 
+                            else 
+                                Icons.Default.DarkMode,
+                            contentDescription = "Toggle Theme",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+## Reactive Theme Updates
+
+The Flow-based API enables automatic UI updates when theme changes:
+
+```kotlin
+@Composable
+fun MyScreen() {
+    // Automatically recomposes when theme changes
+    val isDarkTheme by ThemeStore.isDarkTheme.collectAsState()
+    
+    Surface(
+        color = if (isDarkTheme) 
+            Color.Black 
+        else 
+            Color.White
+    ) {
+        Text(
+            text = "Current theme: ${if (isDarkTheme) "Dark" else "Light"}",
+            color = if (isDarkTheme) 
+                Color.White 
+                else 
+                Color.Black
+        )
+    }
+}
+```
+
+## Storage Details
+
+<Accordion title="SharedPreferences configuration">
+  - **Preference file name**: `"theme_prefs"`
+  - **Storage key**: `"is_dark_theme"`
+  - **Storage mode**: `Context.MODE_PRIVATE`
+  - **Default value**: `true` (dark theme)
+</Accordion>
+
+<Accordion title="Persistence behavior">
+  - Theme preference persists across app restarts
+  - Preference is stored in the app's private data directory
+  - No cloud sync - preference is device-local only
+  - Cleared when app data is cleared or app is uninstalled
+</Accordion>
+
+## Design Pattern
+
+ThemeStore implements several design patterns:
+
+### Singleton Pattern
+
+The `object` keyword creates a singleton, ensuring only one instance manages theme state:
+
+```kotlin
+object ThemeStore {
+    // Single source of truth for theme state
+}
+```
+
+### State Pattern with Flow
+
+Uses Kotlin Flow for reactive state management:
+
+```kotlin
+private val _isDarkTheme = MutableStateFlow(true)  // Private mutable state
+val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()  // Public read-only state
+```
+
+### Repository Pattern
+
+Encapsulates data access (SharedPreferences) behind a clean API:
+
+```kotlin
+// Internal implementation detail
+private const val PREFS_NAME = "theme_prefs"
+
+// Public API
+fun loadTheme(context: Context)
+fun setDarkTheme(context: Context, isDark: Boolean)
+```
+
+## Testing Considerations
+
+When testing components that use ThemeStore:
+
+```kotlin
+@Test
+fun testThemeStoreDefaultValue() {
+    // Initial state is dark theme
+    assertEquals(true, ThemeStore.isDarkTheme.value)
+}
+
+@Test
+fun testThemeToggle() = runTest {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    
+    // Set to light theme
+    ThemeStore.setDarkTheme(context, false)
+    assertEquals(false, ThemeStore.isDarkTheme.value)
+    
+    // Set back to dark theme
+    ThemeStore.setDarkTheme(context, true)
+    assertEquals(true, ThemeStore.isDarkTheme.value)
+}
+```
+
+## Material Design 3 Integration
+
+ThemeStore works with the Material Design 3 theme system:
+
+```kotlin
+@Composable
+fun Ev_sum_2Theme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    val colorScheme = if (darkTheme) {
+        darkColorScheme(
+            primary = Primary,
+            secondary = Secondary,
+            background = Background,
+            surface = Surface
+        )
+    } else {
+        lightColorScheme(
+            primary = LightPrimary,
+            secondary = LightSecondary,
+            background = LightBackground,
+            surface = LightSurface
+        )
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography,
+        content = content
+    )
+}
+```
+
+## Related Components
+
+- [MainActivity](/setup#main-activity) - Initializes ThemeStore on app startup
+- [Theme Colors](/architecture/project-structure#theme-configuration) - Color schemes for dark/light modes
+
+## Source Code
+
+View the complete implementation in the repository:
+
+`app/src/main/java/com/demodogo/ev_sum_2/data/ThemeStore.kt`

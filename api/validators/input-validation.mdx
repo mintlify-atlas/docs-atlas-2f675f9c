@@ -1,0 +1,232 @@
+---
+title: "Input validation"
+description: "Email and password validation utilities"
+---
+
+## Overview
+
+The input validation module provides Kotlin extension functions for validating user input, specifically email addresses and passwords. These validators are used throughout the authentication flow.
+
+**File Location**: `com.demodogo.ev_sum_2.domain.validators.Validators`
+
+## Email Validation
+
+### isBasicEmailValid()
+
+Extension function that validates email format with basic checks.
+
+```kotlin
+fun String.isBasicEmailValid(): Boolean =
+    contains("@") && contains(".") && emailDomain.isNotBlank()
+```
+
+<ParamField path="this" type="String" required>
+  The email string to validate
+</ParamField>
+
+**Returns**: `Boolean` - `true` if the email meets basic validation criteria
+
+### Validation Rules
+
+The email is considered valid if it:
+- Contains the "@" symbol
+- Contains at least one "." character
+- Has a non-blank domain after the "@" symbol
+
+### emailDomain Property
+
+Helper property that extracts the domain portion of an email:
+
+```kotlin
+val String.emailDomain: String
+    get() = substringAfter("@", missingDelimiterValue = "")
+```
+
+Returns an empty string if no "@" symbol is found.
+
+### Usage Examples
+
+```kotlin
+// Valid emails
+"user@example.com".isBasicEmailValid()  // true
+"admin@test.cl".isBasicEmailValid()     // true
+"name.surname@domain.co.uk".isBasicEmailValid()  // true
+
+// Invalid emails
+"invalid".isBasicEmailValid()           // false (no @)
+"no@domain".isBasicEmailValid()         // false (no .)
+"@nodomain.com".isBasicEmailValid()     // false (blank domain)
+"user@".isBasicEmailValid()             // false (blank domain)
+```
+
+### Integration with UI
+
+Used in authentication screens for email validation:
+
+```kotlin
+@Composable
+fun LoginScreen() {
+    var email by remember { mutableStateOf("") }
+    
+    Button(
+        onClick = {
+            val cleanEmail = email.trim()
+            when {
+                cleanEmail.isBlank() -> {
+                    // Show error: "Completa tu email"
+                }
+                !cleanEmail.isBasicEmailValid() -> {
+                    // Show error: "Email inválido"
+                }
+                else -> {
+                    // Proceed with login
+                }
+            }
+        }
+    ) {
+        Text("Login")
+    }
+}
+```
+
+## Password Validation
+
+### isValidPassword()
+
+Extension function that validates password strength requirements.
+
+```kotlin
+fun String.isValidPassword(): Boolean =
+    length >= 6 && any { it.isLetter() } && any { it.isDigit() } && !contains(" ")
+```
+
+<ParamField path="this" type="String" required>
+  The password string to validate
+</ParamField>
+
+**Returns**: `Boolean` - `true` if the password meets all strength requirements
+
+### Validation Rules
+
+The password is considered valid if it:
+- Is at least 6 characters long
+- Contains at least one letter (a-z, A-Z)
+- Contains at least one digit (0-9)
+- Does not contain any spaces
+
+### Usage Examples
+
+```kotlin
+// Valid passwords
+"pass123".isValidPassword()      // true
+"Abc123".isValidPassword()       // true
+"a1b2c3".isValidPassword()       // true
+
+// Invalid passwords
+"12345".isValidPassword()        // false (no letters)
+"abcdef".isValidPassword()       // false (no digits)
+"abc12".isValidPassword()        // false (too short)
+"pass 123".isValidPassword()     // false (contains space)
+```
+
+### Integration with UI
+
+Used in registration screen for password validation:
+
+```kotlin
+@Composable
+fun RegisterScreen() {
+    var password by remember { mutableStateOf("") }
+    
+    Button(
+        onClick = {
+            when {
+                password.isBlank() -> {
+                    // Show error: "Completa tu contraseña"
+                }
+                !password.isValidPassword() -> {
+                    // Show error: "La contraseña debe tener al menos 6 caracteres, 
+                    //             1 letra y 1 número"
+                }
+                else -> {
+                    // Proceed with registration
+                }
+            }
+        }
+    ) {
+        Text("Register")
+    }
+}
+```
+
+## Validation Messages
+
+Common error messages used with these validators:
+
+<Accordion title="Email validation messages">
+  - **Blank email**: "Completa tu email"
+  - **Invalid format**: "Email inválido (ej: nombre@dominio.com)"
+</Accordion>
+
+<Accordion title="Password validation messages">
+  - **Blank password**: "Completa tu contraseña"
+  - **Invalid format**: "La contraseña debe tener al menos 6 caracteres, 1 letra y 1 número"
+</Accordion>
+
+## Testing
+
+These validators are designed to be easily testable since they're pure functions:
+
+```kotlin
+@Test
+fun testEmailValidation() {
+    assertTrue("user@example.com".isBasicEmailValid())
+    assertFalse("invalid".isBasicEmailValid())
+    assertFalse("@nodomain".isBasicEmailValid())
+}
+
+@Test
+fun testPasswordValidation() {
+    assertTrue("pass123".isValidPassword())
+    assertFalse("12345".isValidPassword())
+    assertFalse("short1".isValidPassword())
+    assertFalse("pass 123".isValidPassword())
+}
+```
+
+## Comparison with Speech Normalization
+
+While [speech normalization](/api/validators/speech-normalization) converts spoken words to typed format, input validation ensures the final result meets security and format requirements:
+
+<Tabs>
+  <Tab title="Speech Normalization">
+    Converts spoken input to typed format:
+    
+    ```kotlin
+    normalizeEmailFromSpeech("admin arroba test punto cl")
+    // Returns: "admin@test.cl"
+    ```
+  </Tab>
+  
+  <Tab title="Input Validation">
+    Validates the normalized result:
+    
+    ```kotlin
+    "admin@test.cl".isBasicEmailValid()  // true
+    "@test.cl".isBasicEmailValid()       // false
+    ```
+  </Tab>
+</Tabs>
+
+## Related Components
+
+- [Speech Normalization](/api/validators/speech-normalization) - Converts speech to email/password format
+- [LoginScreen](/api/screens/login-screen) - Uses email validation
+- [RegisterScreen](/api/screens/register-screen) - Uses both email and password validation
+- [RecoverScreen](/api/screens/recover-screen) - Uses email validation
+
+## Source Code
+
+View the complete implementation in the repository:
+
+`app/src/main/java/com/demodogo/ev_sum_2/domain/validators/Validators.kt`

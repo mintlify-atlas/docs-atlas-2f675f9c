@@ -1,0 +1,212 @@
+---
+title: "RecoverScreen"
+description: "Password recovery screen component"
+---
+
+## Overview
+
+`RecoverScreen` is a Jetpack Compose screen component that provides password recovery functionality. It allows users to request a password reset email through Firebase Authentication.
+
+**File Location**: `com.demodogo.ev_sum_2.ui.auth.RecoverScreen`
+
+## Component Signature
+
+```kotlin
+@Composable
+fun RecoverScreen(
+    onBackToLogin: () -> Unit
+)
+```
+
+## Parameters
+
+<ParamField path="onBackToLogin" type="() -> Unit" required>
+  Callback function invoked when the user wants to navigate back to the login screen
+</ParamField>
+
+## State Management
+
+The component manages the following internal state:
+
+- **email**: User's email input for password recovery
+- **message**: Feedback message (success or error)
+- **isError**: Boolean flag indicating if the message is an error
+
+## Features
+
+### Email validation
+
+The screen validates the email input before sending a recovery request:
+
+```kotlin
+val cleanEmail = email.trim()
+when {
+    cleanEmail.isBlank() -> {
+        message = "Completa tu email"
+        isError = true
+    }
+    !cleanEmail.isBasicEmailValid() -> {
+        message = "Email inválido (ej: nombre@dominio.com)"
+        isError = true
+    }
+    else -> {
+        // Send recovery request
+    }
+}
+```
+
+### Password recovery flow
+
+Uses `AuthService` to send password reset emails:
+
+```kotlin
+scope.launch {
+    try {
+        authService.recover(cleanEmail)
+        message = "Solicitud de recuperación enviada"
+        isError = false
+    } catch(e: Exception) {
+        message = e.message ?: "Error al enviar solicitud"
+        isError = true
+    }
+}
+```
+
+## UI Components
+
+The screen includes:
+
+- Lock reset icon (Material Icons Outlined)
+- Email input field with validation
+- Submit button to send recovery request
+- Feedback card showing success or error messages
+- Navigation link back to login screen
+
+### Visual feedback
+
+Success and error messages are displayed in colored cards:
+
+```kotlin
+Card(
+    colors = CardDefaults.cardColors(
+        containerColor = if (isError) 
+            MaterialTheme.colorScheme.error.copy(alpha = 0.1f) 
+        else 
+            Success.copy(alpha = 0.1f)
+    )
+) {
+    Row {
+        Icon(
+            imageVector = if (isError) Icons.Default.Info else Icons.Default.CheckCircle,
+            tint = if (isError) MaterialTheme.colorScheme.error else Success
+        )
+        Text(message)
+    }
+}
+```
+
+## Usage Example
+
+### Basic navigation setup
+
+```kotlin
+@Composable
+fun AuthNavGraph() {
+    val navController = rememberNavController()
+    
+    NavHost(navController = navController, startDestination = "login") {
+        composable("login") {
+            LoginScreen(
+                onLoginClick = { /* ... */ },
+                onRegisterClick = { navController.navigate("register") },
+                onRecoverClick = { navController.navigate("recover") }
+            )
+        }
+        
+        composable("recover") {
+            RecoverScreen(
+                onBackToLogin = { 
+                    navController.popBackStack() 
+                }
+            )
+        }
+    }
+}
+```
+
+### Standalone usage
+
+```kotlin
+@Preview
+@Composable
+fun RecoverScreenPreview() {
+    Ev_sum_2Theme {
+        RecoverScreen(
+            onBackToLogin = { /* Handle navigation */ }
+        )
+    }
+}
+```
+
+## Email Validation
+
+The screen uses the `isBasicEmailValid()` extension function from the validators package:
+
+```kotlin
+fun String.isBasicEmailValid(): Boolean =
+    contains("@") && contains(".") && emailDomain.isNotBlank()
+```
+
+This ensures the email:
+- Contains an "@" symbol
+- Contains a "." character
+- Has a non-blank domain after "@"
+
+## Error Handling
+
+Common error scenarios:
+
+<Accordion title="Blank email">
+  **Error**: "Completa tu email"
+  
+  **Cause**: User submitted empty email field
+  
+  **Resolution**: Enter a valid email address
+</Accordion>
+
+<Accordion title="Invalid email format">
+  **Error**: "Email inválido (ej: nombre@dominio.com)"
+  
+  **Cause**: Email doesn't match basic validation pattern
+  
+  **Resolution**: Ensure email contains @ and . with proper domain
+</Accordion>
+
+<Accordion title="Network/Firebase errors">
+  **Error**: Firebase-specific error message
+  
+  **Cause**: Network issues or Firebase service errors
+  
+  **Resolution**: Check internet connection and try again
+</Accordion>
+
+## Design Specifications
+
+- **Layout**: Vertical column with centered alignment
+- **Spacing**: 24dp horizontal padding, 16dp vertical padding
+- **Input field**: Rounded corners (16dp), full width
+- **Button**: Primary color, 56dp height, full width
+- **Icon size**: 100dp for main lock reset icon
+- **Theme**: Respects Material Design 3 color scheme
+
+## Related Components
+
+- [LoginScreen](/api/screens/login-screen) - Main authentication screen
+- [RegisterScreen](/api/screens/register-screen) - User registration screen
+- [AuthService](/api/services/auth-service) - Authentication service with recover method
+
+## Source Code
+
+View the complete implementation in the repository:
+
+`app/src/main/java/com/demodogo/ev_sum_2/ui/auth/RecoverScreen.kt`
