@@ -1,0 +1,118 @@
+{
+  "projectType": "frontend",
+  "projectName": "EV Sum 2 Android",
+  "projectDescription": "Android mobile application with voice dictation, phrase management, Firebase authentication, and geolocation services built with Kotlin and Jetpack Compose",
+  "theme": "palm",
+  "primaryColor": "#6200EE",
+  "lightColor": "#03DAC6",
+  "darkColor": "#FFD600",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "setup"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/authentication",
+              "features/speech-to-text",
+              "features/phrase-management",
+              "features/geolocation",
+              "features/text-to-speech"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/service-repository-pattern",
+              "architecture/project-structure"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "UI Components",
+            "pages": [
+              "api/screens/home-screen",
+              "api/screens/login-screen",
+              "api/screens/register-screen",
+              "api/screens/location-screen"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "api/services/auth-service",
+              "api/services/phrase-service",
+              "api/services/location-service",
+              "api/services/speech-controller",
+              "api/services/tts-controller"
+            ]
+          },
+          {
+            "group": "Repositories",
+            "pages": [
+              "api/repositories/auth-repository",
+              "api/repositories/phrase-repository",
+              "api/repositories/location-repository"
+            ]
+          },
+          {
+            "group": "Domain Models",
+            "pages": [
+              "api/models/app-user",
+              "api/models/phrase",
+              "api/models/device-location"
+            ]
+          },
+          {
+            "group": "Validators",
+            "pages": [
+              "api/validators/speech-normalization"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Firebase Authentication with login, registration, and password recovery",
+    "Speech-to-text with Spanish language normalization for email and password dictation",
+    "CRUD operations for phrase management with Firestore",
+    "Geolocation with reverse geocoding to convert coordinates to addresses",
+    "Text-to-speech synthesis with Spanish (Chile) locale",
+    "Material Design 3 UI with dark/light theme support",
+    "Service-Repository architecture pattern for clean separation of concerns"
+  ],
+  "publicApiSurface": [
+    "HomeScreen - Main UI with phrase CRUD and navigation",
+    "LoginScreen - Authentication UI for user login",
+    "RegisterScreen - User registration with voice input support",
+    "DeviceLocationScreen - Geolocation display with address",
+    "AuthService - Authentication facade (login, register, logout)",
+    "PhraseService - Phrase CRUD operations",
+    "LocationService - Device location with reverse geocoding",
+    "SpeechController - Speech recognition controller",
+    "TextToSpeechController - TTS synthesis controller",
+    "AuthRepository - Firebase Auth integration",
+    "PhraseRepository - Firestore phrase storage",
+    "LocationRepository - FusedLocationProvider wrapper",
+    "normalizeEmailFromSpeech() - Spanish speech normalization for emails",
+    "normalizePasswordFromSpeech() - Spanish speech normalization for passwords",
+    "AppUser - User domain model",
+    "Phrase - Phrase domain model with timestamp",
+    "DeviceLocation - Location coordinates model"
+  ]
+}
